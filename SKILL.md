@@ -1,0 +1,121 @@
+# Cairn Spatial Platform — Agent Guide
+
+## What is Cairn?
+
+Cairn is a full-featured spatial data platform. It stores, processes, and serves geospatial datasets. Think of it as a self-hosted GIS server with a REST API.
+
+## Authentication
+
+All requests require either an API key (`X-API-Key` header) or a session cookie. The roteiro-agent MCP server handles this automatically — you just need to provide credentials when starting it.
+
+## Key Concepts
+
+- **Dataset**: A named collection of spatial features (points, lines, polygons). Can be GeoJSON, Shapefile, GeoPackage, etc.
+- **Collection**: OGC API term for a dataset. Used interchangeably.
+- **Feature**: A single geographic entity with geometry and properties (attributes).
+- **CQL2**: Common Query Language v2 — a standard for filtering features by attributes and spatial relationships.
+- **Pipeline**: A chain of geoprocessing operations where each step's output feeds the next.
+
+## Working with Data
+
+### Discovering datasets
+
+Start with `list_datasets` to see what's available. Use `get_dataset_info` to drill into a specific dataset's schema, CRS, extent, and feature count. Use `get_dataset_schema` for just the field types, or `get_dataset_profile` for statistical summaries.
+
+### Querying features
+
+Use `query_features` with:
+- `bbox`: spatial bounding box filter (`west,south,east,north`)
+- `filter`: CQL2 expression (e.g. `population > 10000 AND status = 'active'`)
+- `limit`: max features (default 10, use higher values carefully)
+- `properties`: comma-separated list of properties to include (reduces response size)
+- `sortby`: property to sort by (prefix with `-` for descending)
+
+### SQL queries
+
+Use `execute_sql` for complex spatial queries. Cairn exposes PostGIS, so all spatial functions are available:
+- `ST_Area`, `ST_Length`, `ST_Distance` — measurements
+- `ST_Buffer`, `ST_Intersection`, `ST_Union` — geometry operations
+- `ST_Intersects`, `ST_Contains`, `ST_Within` — spatial predicates
+- `ST_Transform` — coordinate system transformation
+
+Queries must be SELECT-only (read-only).
+
+## Geoprocessing Operations
+
+Use `run_process` for single operations or `run_pipeline` for chains. Available operations include:
+
+| Operation | Description | Key Parameters |
+|-----------|-------------|----------------|
+| `buffer` | Create buffer around features | `distance` (meters) |
+| `clip` | Clip features by a mask | `clip_dataset` |
+| `simplify` | Reduce geometry complexity | `tolerance` |
+| `reproject` | Change coordinate system | `target_crs` (e.g. "EPSG:4326") |
+| `centroid` | Calculate centroids | — |
+| `convex_hull` | Convex hull of features | — |
+| `intersection` | Intersect two datasets | `overlay_dataset` |
+| `union` | Union two datasets | `overlay_dataset` |
+| `difference` | Subtract one dataset from another | `overlay_dataset` |
+| `sjoin` | Spatial join | `join_dataset`, `predicate` |
+| `dissolve` | Merge features by attribute | `by` (field name) |
+| `voronoi` | Voronoi polygons | — |
+| `spatial_stats` | Descriptive statistics | — |
+| `morans_i` | Spatial autocorrelation | `attribute` |
+| `hotspot` | Getis-Ord Gi* hotspot analysis | `attribute` |
+| `kernel_density` | Density estimation | `bandwidth`, `cell_size` |
+
+Use `list_operations` to get the full list with parameter schemas.
+
+## Data Catalog & STAC
+
+Cairn includes a built-in data catalog and supports importing from remote STAC (SpatioTemporal Asset Catalog) servers.
+
+### Built-in catalog
+
+Use `browse_catalog` to discover datasets available for import. Filter by `search` (text) or `category`. Use `import_from_catalog` with a `catalog_id` to download and register a dataset.
+
+### Remote STAC catalogs
+
+For external data sources:
+1. `browse_stac_catalog` — inspect a remote STAC catalog by URL
+2. `browse_stac_collections` — list available collections
+3. `browse_stac_items` — preview items with optional `bbox` and `datetime` filters
+4. `import_stac_asset` — download an asset URL and register it as a local dataset
+
+### Local STAC search
+
+Use `search_stac` to search Cairn's own STAC endpoint with spatial (`bbox`), temporal (`datetime`), collection, and CQL2 (`filter`) criteria.
+
+## Tips for Effective Use
+
+1. **Start with discovery**: Always `list_datasets` first to understand what's available.
+2. **Use small limits**: Default to `limit=10` when exploring. Increase only when needed.
+3. **Prefer SQL for analytics**: For aggregations, joins, and complex spatial queries, `execute_sql` is more efficient than fetching features and computing client-side.
+4. **Chain operations with pipelines**: Instead of running operations one by one, use `run_pipeline` to chain them in a single request.
+5. **Check schemas before querying**: Use `get_dataset_schema` to see available fields before writing CQL2 filters or SQL.
+
+## Common Patterns
+
+### Find features near a point
+```sql
+SELECT * FROM parks
+WHERE ST_DWithin(geom, ST_SetSRID(ST_MakePoint(-73.97, 40.77), 4326), 0.01)
+LIMIT 20
+```
+
+### Aggregate by region
+```sql
+SELECT r.name, COUNT(p.*) as count, SUM(ST_Area(p.geom::geography)) as total_area_m2
+FROM regions r JOIN parcels p ON ST_Intersects(r.geom, p.geom)
+GROUP BY r.name ORDER BY count DESC
+```
+
+### Buffer and intersect
+```json
+{
+  "steps": [
+    {"operation": "buffer", "input": "schools", "params": {"distance": 1000}},
+    {"operation": "intersection", "params": {"overlay_dataset": "residential_zones"}}
+  ]
+}
+```
