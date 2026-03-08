@@ -116,6 +116,8 @@ Add to `.mcp.json`:
 | `browse_stac_items` | List items in a remote STAC collection |
 | `import_stac_asset` | Import a STAC asset as a local dataset |
 | `search_stac` | Search local STAC with bbox/datetime/CQL2 filters |
+| `indoor_api` | Allowlisted Indoor GIS endpoint access (buildings/floors/spaces/navigation/analytics/sensors/booking/geofences/simulations). Mutations require `confirm=true`. |
+| `map_api` | Allowlisted map endpoint access (publish/unpublish/stats/embed config, raster metadata/values, OGC feature edit ops). Mutations require `confirm=true`. |
 
 ## Example Workflows
 

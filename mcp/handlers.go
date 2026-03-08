@@ -3,7 +3,9 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 )
 
 // HandleToolCall dispatches a tool call to the appropriate handler and returns
@@ -86,9 +88,109 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		return handleImportSTACAsset(client, params)
 	case "search_stac":
 		return handleSearchSTAC(client, params)
+	case "indoor_api":
+		return handleIndoorAPI(client, params)
+	case "map_api":
+		return handleMapAPI(client, params)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", name)
 	}
+}
+
+type apiOperation struct {
+	Method   string
+	Path     string
+	Mutating bool
+}
+
+var indoorOperations = map[string]apiOperation{
+	"list_campuses":            {Method: "GET", Path: "/api/indoor/campuses"},
+	"create_campus":            {Method: "POST", Path: "/api/indoor/campuses", Mutating: true},
+	"get_campus":               {Method: "GET", Path: "/api/indoor/campuses/{campus_id}"},
+	"update_campus":            {Method: "PUT", Path: "/api/indoor/campuses/{campus_id}", Mutating: true},
+	"delete_campus":            {Method: "DELETE", Path: "/api/indoor/campuses/{campus_id}", Mutating: true},
+	"list_campus_buildings":    {Method: "GET", Path: "/api/indoor/campuses/{campus_id}/buildings"},
+	"list_buildings":           {Method: "GET", Path: "/api/indoor/buildings"},
+	"create_building":          {Method: "POST", Path: "/api/indoor/buildings", Mutating: true},
+	"get_building":             {Method: "GET", Path: "/api/indoor/buildings/{building_id}"},
+	"update_building":          {Method: "PUT", Path: "/api/indoor/buildings/{building_id}", Mutating: true},
+	"delete_building":          {Method: "DELETE", Path: "/api/indoor/buildings/{building_id}", Mutating: true},
+	"list_floors":              {Method: "GET", Path: "/api/indoor/buildings/{building_id}/floors"},
+	"create_floor":             {Method: "POST", Path: "/api/indoor/buildings/{building_id}/floors", Mutating: true},
+	"upload_floor_plan":        {Method: "POST", Path: "/api/indoor/buildings/{building_id}/floors/{floor_id}/plan", Mutating: true},
+	"list_floor_spaces":        {Method: "GET", Path: "/api/indoor/buildings/{building_id}/floors/{level}/spaces"},
+	"create_space":             {Method: "POST", Path: "/api/indoor/buildings/{building_id}/spaces", Mutating: true},
+	"get_space":                {Method: "GET", Path: "/api/indoor/buildings/{building_id}/spaces/{space_id}"},
+	"update_space":             {Method: "PUT", Path: "/api/indoor/buildings/{building_id}/spaces/{space_id}", Mutating: true},
+	"delete_space":             {Method: "DELETE", Path: "/api/indoor/buildings/{building_id}/spaces/{space_id}", Mutating: true},
+	"list_transitions":         {Method: "GET", Path: "/api/indoor/buildings/{building_id}/transitions"},
+	"list_boundaries":          {Method: "GET", Path: "/api/indoor/buildings/{building_id}/boundaries"},
+	"create_boundary":          {Method: "POST", Path: "/api/indoor/buildings/{building_id}/boundaries", Mutating: true},
+	"get_boundary":             {Method: "GET", Path: "/api/indoor/buildings/{building_id}/boundaries/{boundary_id}"},
+	"update_boundary":          {Method: "PUT", Path: "/api/indoor/buildings/{building_id}/boundaries/{boundary_id}", Mutating: true},
+	"delete_boundary":          {Method: "DELETE", Path: "/api/indoor/buildings/{building_id}/boundaries/{boundary_id}", Mutating: true},
+	"list_assets":              {Method: "GET", Path: "/api/indoor/buildings/{building_id}/assets"},
+	"create_asset":             {Method: "POST", Path: "/api/indoor/buildings/{building_id}/assets", Mutating: true},
+	"update_asset_position":    {Method: "PUT", Path: "/api/indoor/buildings/{building_id}/assets/{asset_id}", Mutating: true},
+	"navigate":                 {Method: "POST", Path: "/api/indoor/navigate"},
+	"find_nearest":             {Method: "POST", Path: "/api/indoor/navigate/nearest"},
+	"navigate_outdoor":         {Method: "POST", Path: "/api/indoor/navigate/outdoor"},
+	"import_building":          {Method: "POST", Path: "/api/indoor/import", Mutating: true},
+	"export_imdf":              {Method: "GET", Path: "/api/indoor/buildings/{building_id}/export/imdf"},
+	"export_indoorgml":         {Method: "GET", Path: "/api/indoor/buildings/{building_id}/export/indoorgml"},
+	"get_occupancy":            {Method: "GET", Path: "/api/indoor/buildings/{building_id}/occupancy"},
+	"get_stats":                {Method: "GET", Path: "/api/indoor/buildings/{building_id}/stats"},
+	"validate_building":        {Method: "GET", Path: "/api/indoor/buildings/{building_id}/validate"},
+	"get_accessibility":        {Method: "GET", Path: "/api/indoor/buildings/{building_id}/analysis/accessibility"},
+	"get_historical_analytics": {Method: "GET", Path: "/api/indoor/buildings/{building_id}/analytics"},
+	"ingest_sensor_data":       {Method: "POST", Path: "/api/indoor/buildings/{building_id}/sensors", Mutating: true},
+	"get_sensor_data":          {Method: "GET", Path: "/api/indoor/buildings/{building_id}/sensors"},
+	"get_sensor_heatmap":       {Method: "GET", Path: "/api/indoor/buildings/{building_id}/sensors/heatmap"},
+	"get_sensor_timeseries":    {Method: "GET", Path: "/api/indoor/buildings/{building_id}/sensors/timeseries"},
+	"ingest_positions":         {Method: "POST", Path: "/api/indoor/buildings/{building_id}/positions", Mutating: true},
+	"get_latest_positions":     {Method: "GET", Path: "/api/indoor/buildings/{building_id}/positions/latest"},
+	"get_position_history":     {Method: "GET", Path: "/api/indoor/buildings/{building_id}/positions/{device_id}/history"},
+	"create_booking":           {Method: "POST", Path: "/api/indoor/buildings/{building_id}/bookings", Mutating: true},
+	"list_bookings":            {Method: "GET", Path: "/api/indoor/buildings/{building_id}/bookings"},
+	"cancel_booking":           {Method: "DELETE", Path: "/api/indoor/buildings/{building_id}/bookings/{booking_id}", Mutating: true},
+	"checkin_booking":          {Method: "POST", Path: "/api/indoor/buildings/{building_id}/bookings/{booking_id}/checkin", Mutating: true},
+	"list_geofences":           {Method: "GET", Path: "/api/indoor/buildings/{building_id}/geofences"},
+	"create_geofence":          {Method: "POST", Path: "/api/indoor/buildings/{building_id}/geofences", Mutating: true},
+	"get_geofence":             {Method: "GET", Path: "/api/indoor/buildings/{building_id}/geofences/{geofence_id}"},
+	"update_geofence":          {Method: "PUT", Path: "/api/indoor/buildings/{building_id}/geofences/{geofence_id}", Mutating: true},
+	"delete_geofence":          {Method: "DELETE", Path: "/api/indoor/buildings/{building_id}/geofences/{geofence_id}", Mutating: true},
+	"get_evacuation_routes":    {Method: "POST", Path: "/api/indoor/buildings/{building_id}/evacuation"},
+	"trigger_evacuation_alert": {Method: "POST", Path: "/api/indoor/buildings/{building_id}/evacuation/alert", Mutating: true},
+	"topology_resilience":      {Method: "POST", Path: "/api/indoor/buildings/{building_id}/topology/resilience"},
+	"topology_track":           {Method: "POST", Path: "/api/indoor/buildings/{building_id}/topology/track"},
+	"topology_compare":         {Method: "POST", Path: "/api/indoor/buildings/{building_id}/topology/compare"},
+	"spectral_analysis":        {Method: "POST", Path: "/api/indoor/buildings/{building_id}/spectral"},
+	"evacuation_optimal":       {Method: "POST", Path: "/api/indoor/buildings/{building_id}/evacuation/optimal"},
+	"simulate_fire_evacuation": {Method: "POST", Path: "/api/indoor/buildings/{building_id}/simulate/fire-evacuation"},
+	"simulate_airflow":         {Method: "POST", Path: "/api/indoor/floors/{floor_id}/simulate/airflow"},
+	"simulate_acoustics":       {Method: "POST", Path: "/api/indoor/floors/{floor_id}/simulate/acoustics"},
+	"simulate_thermal":         {Method: "POST", Path: "/api/indoor/floors/{floor_id}/simulate/thermal"},
+	"simulate_rf":              {Method: "POST", Path: "/api/indoor/floors/{floor_id}/simulate/rf"},
+	"navigate_manifold":        {Method: "POST", Path: "/api/indoor/floors/{floor_id}/navigate/manifold"},
+	"forecast":                 {Method: "POST", Path: "/api/indoor/floors/{floor_id}/forecast"},
+	"simulate_infection_risk":  {Method: "POST", Path: "/api/indoor/floors/{floor_id}/simulate/infection-risk"},
+}
+
+var mapOperations = map[string]apiOperation{
+	"publish_map":             {Method: "POST", Path: "/api/maps/publish", Mutating: true},
+	"list_published_maps":     {Method: "GET", Path: "/api/maps/published"},
+	"unpublish_map":           {Method: "DELETE", Path: "/api/maps/published/{token}", Mutating: true},
+	"get_published_map_stats": {Method: "GET", Path: "/api/maps/published/{token}/stats"},
+	"update_map_embed_config": {Method: "PUT", Path: "/api/maps/published/{token}/embed-config", Mutating: true},
+	"get_public_map":          {Method: "GET", Path: "/public/maps/{token}"},
+	"get_raster_info":         {Method: "GET", Path: "/raster/{name}/info"},
+	"get_raster_stats":        {Method: "GET", Path: "/raster/{name}/stats"},
+	"get_raster_histogram":    {Method: "GET", Path: "/raster/{name}/histogram"},
+	"get_raster_dimensions":   {Method: "GET", Path: "/raster/{name}/dimensions"},
+	"get_raster_values":       {Method: "GET", Path: "/raster/{name}/values"},
+	"create_feature":          {Method: "POST", Path: "/collections/{collection_id}/items", Mutating: true},
+	"update_feature":          {Method: "PUT", Path: "/collections/{collection_id}/items/{feature_id}", Mutating: true},
+	"delete_feature":          {Method: "DELETE", Path: "/collections/{collection_id}/items/{feature_id}", Mutating: true},
 }
 
 func handleListDatasets(client *Client) (string, error) {
@@ -666,6 +768,116 @@ func handleSearchSTAC(client *Client, params map[string]interface{}) (string, er
 		return "", err
 	}
 	return formatJSON(data), nil
+}
+
+func handleIndoorAPI(client *Client, params map[string]interface{}) (string, error) {
+	return handleScopedAPI(client, params, indoorOperations, "indoor")
+}
+
+func handleMapAPI(client *Client, params map[string]interface{}) (string, error) {
+	return handleScopedAPI(client, params, mapOperations, "map")
+}
+
+func handleScopedAPI(client *Client, params map[string]interface{}, ops map[string]apiOperation, scope string) (string, error) {
+	opName, err := requireString(params, "operation")
+	if err != nil {
+		return "", err
+	}
+	op, ok := ops[opName]
+	if !ok {
+		return "", fmt.Errorf("unknown %s operation: %s", scope, opName)
+	}
+	if op.Mutating && !requireConfirm(params) {
+		return "", fmt.Errorf("%s operation %q mutates data; pass confirm=true to proceed", scope, opName)
+	}
+
+	path, err := interpolatePath(op.Path, params)
+	if err != nil {
+		return "", err
+	}
+	query, err := extractQuery(params)
+	if err != nil {
+		return "", err
+	}
+	body := extractBody(params)
+	if op.Method == "GET" || op.Method == "DELETE" {
+		body = nil
+	}
+
+	data, err := client.APIRequest(op.Method, path, body, query)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func requireConfirm(params map[string]interface{}) bool {
+	v, ok := params["confirm"]
+	if !ok {
+		return false
+	}
+	b, ok := v.(bool)
+	return ok && b
+}
+
+func extractBody(params map[string]interface{}) interface{} {
+	if raw, ok := params["body"]; ok {
+		if _, ok := raw.(map[string]interface{}); ok {
+			return raw
+		}
+		if _, ok := raw.([]interface{}); ok {
+			return raw
+		}
+	}
+	return nil
+}
+
+func extractQuery(params map[string]interface{}) (map[string]string, error) {
+	raw, ok := params["query"]
+	if !ok {
+		return nil, nil
+	}
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("query must be an object of key/value pairs")
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		if k == "" || v == nil {
+			continue
+		}
+		s, err := stringify(v)
+		if err != nil {
+			return nil, fmt.Errorf("query.%s must be string/number/bool", k)
+		}
+		out[k] = s
+	}
+	return out, nil
+}
+
+func interpolatePath(tpl string, params map[string]interface{}) (string, error) {
+	out := tpl
+	for {
+		start := strings.IndexByte(out, '{')
+		if start == -1 {
+			return out, nil
+		}
+		end := strings.IndexByte(out[start:], '}')
+		if end == -1 {
+			return "", fmt.Errorf("invalid operation path template: %s", tpl)
+		}
+		end += start
+		key := out[start+1 : end]
+		val, ok := params[key]
+		if !ok {
+			return "", fmt.Errorf("missing required path parameter: %s", key)
+		}
+		s, err := stringify(val)
+		if err != nil || strings.TrimSpace(s) == "" {
+			return "", fmt.Errorf("invalid path parameter %s", key)
+		}
+		out = out[:start] + url.PathEscape(s) + out[end+1:]
+	}
 }
 
 // formatJSON pretty-prints JSON for readability in agent responses.

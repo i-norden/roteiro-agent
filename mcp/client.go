@@ -79,6 +79,57 @@ func (c *Client) postJSON(path string, payload interface{}) ([]byte, int, error)
 	return c.do(req)
 }
 
+func (c *Client) callJSON(method, path string, payload interface{}, query map[string]string) ([]byte, int, error) {
+	if !strings.HasPrefix(path, "/") {
+		return nil, 0, fmt.Errorf("path must start with '/': %s", path)
+	}
+	u := c.BaseURL + path
+	if len(query) > 0 {
+		q := url.Values{}
+		for k, v := range query {
+			if k != "" && v != "" {
+				q.Set(k, v)
+			}
+		}
+		if enc := q.Encode(); enc != "" {
+			u += "?" + enc
+		}
+	}
+
+	var body io.Reader
+	if payload != nil {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return nil, 0, err
+		}
+		body = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequest(method, u, body)
+	if err != nil {
+		return nil, 0, err
+	}
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return c.do(req)
+}
+
+// APIRequest sends a constrained API request used by allowlisted MCP tools.
+func (c *Client) APIRequest(method, path string, payload interface{}, query map[string]string) (json.RawMessage, error) {
+	body, code, err := c.callJSON(method, path, payload, query)
+	if err != nil {
+		return nil, err
+	}
+	if code < 200 || code >= 300 {
+		return nil, fmt.Errorf("%s %s returned %d: %s", method, path, code, truncate(body, 500))
+	}
+	if len(body) == 0 {
+		return json.RawMessage(`{"status":"ok"}`), nil
+	}
+	return json.RawMessage(body), nil
+}
+
 // ListDatasets calls GET /datasets.
 func (c *Client) ListDatasets() (json.RawMessage, error) {
 	body, code, err := c.get("/datasets", nil)
