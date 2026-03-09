@@ -1,8 +1,8 @@
-# Cairn Spatial Platform — Agent Guide
+# Roteiro Spatial Platform — Agent Guide
 
-## What is Cairn?
+## What is Roteiro?
 
-Cairn is a full-featured spatial data platform. It stores, processes, and serves geospatial datasets. Think of it as a self-hosted GIS server with a REST API.
+Roteiro is a full-featured spatial data platform. It stores, processes, and serves geospatial datasets. Think of it as a self-hosted GIS server with a REST API.
 
 ## Authentication
 
@@ -33,7 +33,7 @@ Use `query_features` with:
 
 ### SQL queries
 
-Use `execute_sql` for complex spatial queries. Cairn exposes PostGIS, so all spatial functions are available:
+Use `execute_sql` for complex spatial queries. Roteiro exposes PostGIS, so all spatial functions are available:
 - `ST_Area`, `ST_Length`, `ST_Distance` — measurements
 - `ST_Buffer`, `ST_Intersection`, `ST_Union` — geometry operations
 - `ST_Intersects`, `ST_Contains`, `ST_Within` — spatial predicates
@@ -68,7 +68,7 @@ Use `list_operations` to get the full list with parameter schemas.
 
 ## Data Catalog & STAC
 
-Cairn includes a built-in data catalog and supports importing from remote STAC (SpatioTemporal Asset Catalog) servers.
+Roteiro includes a built-in data catalog and supports importing from remote STAC (SpatioTemporal Asset Catalog) servers.
 
 ### Built-in catalog
 
@@ -84,7 +84,7 @@ For external data sources:
 
 ### Local STAC search
 
-Use `search_stac` to search Cairn's own STAC endpoint with spatial (`bbox`), temporal (`datetime`), collection, and CQL2 (`filter`) criteria.
+Use `search_stac` to search Roteiro's own STAC endpoint with spatial (`bbox`), temporal (`datetime`), collection, and CQL2 (`filter`) criteria.
 
 ## Tips for Effective Use
 

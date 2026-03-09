@@ -29,7 +29,7 @@ func AllTools() []Tool {
 	return []Tool{
 		{
 			Name:        "list_datasets",
-			Description: "List all datasets registered in Cairn with their names, formats, feature counts, and geometry types.",
+			Description: "List all datasets registered in Roteiro with their names, formats, feature counts, and geometry types.",
 			InputSchema: InputSchema{Type: "object"},
 		},
 		{

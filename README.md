@@ -1,6 +1,6 @@
 # roteiro-agent
 
-MCP (Model Context Protocol) server for [Cairn](https://github.com/i-norden/cairn) — a spatial data platform. Enables AI agents (Claude Desktop, VS Code, Cursor) to work with geospatial datasets, run geoprocessing operations, execute PostGIS queries, and more.
+MCP (Model Context Protocol) server for [Roteiro](roteiro.io) — a spatial data platform. Enables AI agents (Claude Desktop, VS Code, Cursor) to work with geospatial datasets, run geoprocessing operations, execute PostGIS queries, and more.
 
 ## Installation
 
@@ -19,7 +19,7 @@ go build -o roteiro-agent .
 ## Usage
 
 ```bash
-roteiro-agent --server-url http://localhost:8080 --api-key cairn_abc123
+roteiro-agent --server-url http://localhost:8080 --api-key Roteiro_abc123
 ```
 
 The server communicates via JSON-RPC 2.0 over stdio (stdin/stdout), following the MCP specification.
@@ -28,9 +28,9 @@ The server communicates via JSON-RPC 2.0 over stdio (stdin/stdout), following th
 
 | Variable | Flag | Description |
 |----------|------|-------------|
-| `CAIRN_SERVER_URL` | `--server-url` | Cairn server base URL |
-| `CAIRN_API_KEY` | `--api-key` | Cairn API key |
-| `CAIRN_SESSION_COOKIE` | `--session-cookie` | Session cookie (alternative to API key) |
+| `ROTEIRO_SERVER_URL` | `--server-url` | Roteiro server base URL |
+| `ROTEIRO_API_KEY` | `--api-key` | Roteiro API key |
+| `ROTEIRO_SESSION_COOKIE` | `--session-cookie` | Session cookie (alternative to API key) |
 
 ## MCP Client Configuration
 

@@ -1,5 +1,5 @@
 // Package mcp implements an MCP (Model Context Protocol) server that exposes
-// Cairn's spatial data platform to AI agents.
+// Roteiro's spatial data platform to AI agents.
 package mcp
 
 import (
@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// Client is a thin HTTP wrapper for the Cairn REST API.
+// Client is a thin HTTP wrapper for the Roteiro REST API.
 type Client struct {
 	BaseURL       string
 	APIKey        string
@@ -272,7 +272,7 @@ func (c *Client) ExecuteSQL(query string) (json.RawMessage, error) {
 		return nil, err
 	}
 	if code == http.StatusNotFound || code == http.StatusMethodNotAllowed {
-		// Backward compatibility for older Cairn deployments.
+		// Backward compatibility for older Roteiro deployments.
 		body, code, err = c.postJSON("/api/sql/query", map[string]string{"sql": query})
 		if err != nil {
 			return nil, err
