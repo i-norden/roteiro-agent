@@ -21,7 +21,7 @@ type Server struct {
 	info   ServerInfo
 }
 
-// NewServer creates a new MCP server backed by the given Cairn API client.
+// NewServer creates a new MCP server backed by the given Roteiro API client.
 func NewServer(client *Client) *Server {
 	return &Server{
 		client: client,

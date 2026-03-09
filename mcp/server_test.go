@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// testServer creates a test Cairn API server and returns a connected MCP server.
+// testServer creates a test Roteiro API server and returns a connected MCP server.
 func testServer(t *testing.T, handler http.Handler) *Server {
 	t.Helper()
 	ts := httptest.NewServer(handler)
