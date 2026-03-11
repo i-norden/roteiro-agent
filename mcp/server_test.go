@@ -98,7 +98,7 @@ func TestToolsList(t *testing.T) {
 		"diff_datasets", "execute_sql", "list_spatial_tables", "get_duckdb_info",
 		"list_duckdb_datasets", "geocode", "reverse_geocode", "compute_route",
 		"compute_isochrone", "compute_route_matrix", "compute_service_area",
-		"list_operations", "browse_catalog", "browse_catalog_enhanced",
+		"list_operations", "list_analysis_operations", "browse_catalog", "browse_catalog_enhanced",
 		"get_catalog_entry", "list_catalog_categories", "list_catalog_tags", "import_from_catalog", "browse_stac_catalog",
 		"browse_stac_collections", "browse_stac_items", "import_stac_asset",
 		"search_stac",
@@ -106,6 +106,31 @@ func TestToolsList(t *testing.T) {
 		if !toolNames[want] {
 			t.Errorf("missing tool: %s", want)
 		}
+	}
+}
+
+func TestToolsCall_ListAnalysisOperations(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/analysis/operations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"operations":[{"id":"topology","name":"Topology Analysis"}]}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 22, map[string]interface{}{
+		"name":      "list_analysis_operations",
+		"arguments": map[string]interface{}{},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "Topology Analysis") {
+		t.Errorf("response should contain operation name, got: %s", text)
 	}
 }
 

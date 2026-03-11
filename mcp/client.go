@@ -410,6 +410,18 @@ func (c *Client) ListOperations() (json.RawMessage, error) {
 	return json.RawMessage(body), nil
 }
 
+// ListAnalysisOperations calls GET /api/analysis/operations.
+func (c *Client) ListAnalysisOperations() (json.RawMessage, error) {
+	body, code, err := c.get("/api/analysis/operations", nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("GET /api/analysis/operations returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
 // GetDatasetSchema calls GET /api/datasets/{name}/schema.
 func (c *Client) GetDatasetSchema(name string) (json.RawMessage, error) {
 	body, code, err := c.get("/api/datasets/"+url.PathEscape(name)+"/schema", nil)

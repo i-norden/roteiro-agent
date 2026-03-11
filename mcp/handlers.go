@@ -66,6 +66,8 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		return handleComputeServiceArea(client, params)
 	case "list_operations":
 		return handleListOperations(client)
+	case "list_analysis_operations":
+		return handleListAnalysisOperations(client)
 	case "browse_catalog":
 		return handleBrowseCatalog(client, params)
 	case "browse_catalog_enhanced":
@@ -508,6 +510,14 @@ func handleComputeServiceArea(client *Client, params map[string]interface{}) (st
 
 func handleListOperations(client *Client) (string, error) {
 	data, err := client.ListOperations()
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleListAnalysisOperations(client *Client) (string, error) {
+	data, err := client.ListAnalysisOperations()
 	if err != nil {
 		return "", err
 	}

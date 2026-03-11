@@ -108,7 +108,7 @@ func AllTools() []Tool {
 		},
 		{
 			Name:        "run_process",
-			Description: "Run a single geoprocessing operation on a dataset. Operations include: buffer, clip, simplify, reproject, centroid, convex_hull, intersection, union, difference, sjoin, dissolve, voronoi, spatial_stats, morans_i, hotspot, kernel_density, and more.",
+			Description: "Run a single geoprocessing operation on a dataset via /api/process. Use list_operations first to discover the live operation catalog and parameter names on the connected server.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -301,6 +301,11 @@ func AllTools() []Tool {
 		{
 			Name:        "list_operations",
 			Description: "List all available geoprocessing operations with their parameter schemas. Useful for discovering what operations are supported and what parameters they accept.",
+			InputSchema: InputSchema{Type: "object"},
+		},
+		{
+			Name:        "list_analysis_operations",
+			Description: "List all available advanced analysis operations from /api/analysis/operations.",
 			InputSchema: InputSchema{Type: "object"},
 		},
 		{

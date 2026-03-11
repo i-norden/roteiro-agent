@@ -4,7 +4,7 @@
 //
 // Usage:
 //
-//	roteiro-agent --server-url http://localhost:8080 --api-key cairn_abc123
+//	roteiro-agent --server-url http://localhost:8080 --api-key roteiro_abc123
 package main
 
 import (
