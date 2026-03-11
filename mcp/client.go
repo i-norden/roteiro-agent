@@ -229,6 +229,96 @@ func (c *Client) RunProcess(payload interface{}) (json.RawMessage, error) {
 	return json.RawMessage(body), nil
 }
 
+// PreflightProcess calls POST /api/process/preflight.
+func (c *Client) PreflightProcess(payload interface{}) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/process/preflight", payload)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("POST /api/process/preflight returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// SubmitProcessJob calls POST /api/process/jobs.
+func (c *Client) SubmitProcessJob(payload interface{}) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/process/jobs", payload)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusAccepted {
+		return nil, fmt.Errorf("POST /api/process/jobs returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// SubmitProcessBatch calls POST /api/process/jobs/batch.
+func (c *Client) SubmitProcessBatch(payload interface{}) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/process/jobs/batch", payload)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusAccepted {
+		return nil, fmt.Errorf("POST /api/process/jobs/batch returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// ListProcessJobs calls GET /api/process/jobs.
+func (c *Client) ListProcessJobs(params map[string]string) (json.RawMessage, error) {
+	q := url.Values{}
+	for k, v := range params {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	body, code, err := c.get("/api/process/jobs", q)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("GET /api/process/jobs returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// GetProcessJob calls GET /api/process/jobs/{id}.
+func (c *Client) GetProcessJob(id string) (json.RawMessage, error) {
+	body, code, err := c.get("/api/process/jobs/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("GET /api/process/jobs/%s returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// CancelProcessJob calls DELETE /api/process/jobs/{id}.
+func (c *Client) CancelProcessJob(id string) (json.RawMessage, error) {
+	body, code, err := c.callJSON("DELETE", "/api/process/jobs/"+url.PathEscape(id), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusNoContent {
+		return nil, fmt.Errorf("DELETE /api/process/jobs/%s returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(`{"status":"cancelled"}`), nil
+}
+
+// RerunProcessJob calls POST /api/process/jobs/{id}/rerun.
+func (c *Client) RerunProcessJob(id string) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/process/jobs/"+url.PathEscape(id)+"/rerun", map[string]interface{}{})
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusAccepted {
+		return nil, fmt.Errorf("POST /api/process/jobs/%s/rerun returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
 // RunPipeline calls POST /api/pipeline.
 func (c *Client) RunPipeline(payload interface{}) (json.RawMessage, error) {
 	body, code, err := c.postJSON("/api/pipeline", payload)

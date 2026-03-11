@@ -113,14 +113,128 @@ func AllTools() []Tool {
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"operation": {Type: "string", Description: "The geoprocessing operation to run (e.g. 'buffer', 'clip', 'simplify')."},
-					"input":     {Type: "string", Description: "Input dataset name."},
+					"input":     {Type: "string", Description: "Input dataset name. Provide either 'input' or 'input_geojson'."},
+					"input_geojson": {
+						Type:        "object",
+						Description: "Inline GeoJSON input. Provide either 'input' or 'input_geojson'.",
+					},
 					"params": {
 						Type:        "object",
 						Description: "Operation-specific parameters (e.g. {\"distance\": 500} for buffer, {\"tolerance\": 0.001} for simplify).",
 					},
-					"output": {Type: "string", Description: "Output dataset name (optional, auto-generated if not provided)."},
+					"output":        {Type: "string", Description: "Compatibility alias for 'output_name'."},
+					"output_name":   {Type: "string", Description: "Output dataset name when registering or naming results."},
+					"output_format": {Type: "string", Description: "Requested output format (for example 'geojson', 'parquet', or 'csv')."},
+					"format":        {Type: "string", Description: "Compatibility alias for 'output_format'."},
+					"register":      {Type: "boolean", Description: "Whether to register the result as a dataset."},
 				},
-				Required: []string{"operation", "input"},
+				Required: []string{"operation"},
+			},
+		},
+		{
+			Name:        "preflight_process",
+			Description: "Validate and normalize a processing request via /api/process/preflight before executing it. Useful for checking required params, CRS constraints, and normalized dataset references.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"operation":     {Type: "string", Description: "The geoprocessing operation to validate."},
+					"input":         {Type: "string", Description: "Input dataset name. Provide either 'input' or 'input_geojson'."},
+					"input_geojson": {Type: "object", Description: "Inline GeoJSON input. Provide either 'input' or 'input_geojson'."},
+					"params":        {Type: "object", Description: "Operation-specific parameters."},
+					"output":        {Type: "string", Description: "Compatibility alias for 'output_name'."},
+					"output_name":   {Type: "string", Description: "Optional output dataset name."},
+					"output_format": {Type: "string", Description: "Requested output format."},
+					"format":        {Type: "string", Description: "Compatibility alias for 'output_format'."},
+					"register":      {Type: "boolean", Description: "Whether the eventual result should be registered as a dataset."},
+				},
+				Required: []string{"operation"},
+			},
+		},
+		{
+			Name:        "submit_process_job",
+			Description: "Submit an asynchronous processing job via /api/process/jobs. Use this when the operation may take longer, or when preflight recommends async execution.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"operation":     {Type: "string", Description: "The geoprocessing operation to queue."},
+					"input":         {Type: "string", Description: "Input dataset name. Provide either 'input' or 'input_geojson'."},
+					"input_geojson": {Type: "object", Description: "Inline GeoJSON input. Provide either 'input' or 'input_geojson'."},
+					"params":        {Type: "object", Description: "Operation-specific parameters."},
+					"output":        {Type: "string", Description: "Compatibility alias for 'output_name'."},
+					"output_name":   {Type: "string", Description: "Optional output dataset name."},
+					"output_format": {Type: "string", Description: "Requested output format."},
+					"format":        {Type: "string", Description: "Compatibility alias for 'output_format'."},
+					"register":      {Type: "boolean", Description: "Whether to register the result as a dataset."},
+				},
+				Required: []string{"operation"},
+			},
+		},
+		{
+			Name:        "submit_process_batch",
+			Description: "Submit a dependent batch of asynchronous processing jobs via /api/process/jobs/batch.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"jobs": {
+						Type:        "array",
+						Description: "Array of batch jobs. Each item supports client_id, depends_on, and request fields matching submit_process_job.",
+						Items: &PropertySchema{
+							Type: "object",
+							Properties: map[string]PropertySchema{
+								"client_id":  {Type: "string", Description: "Optional client-side identifier used for dependency references."},
+								"depends_on": {Type: "array", Description: "Optional list of batch client IDs or job IDs this job depends on.", Items: &PropertySchema{Type: "string"}},
+								"request":    {Type: "object", Description: "Process request payload matching submit_process_job."},
+							},
+						},
+					},
+				},
+				Required: []string{"jobs"},
+			},
+		},
+		{
+			Name:        "list_process_jobs",
+			Description: "List asynchronous processing jobs via /api/process/jobs with optional filtering.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"status": {Type: "string", Description: "Optional job status filter: queued, processing, completed, failed, cancelled."},
+					"search": {Type: "string", Description: "Optional substring match against operation or job metadata."},
+					"limit":  {Type: "string", Description: "Optional max jobs to return."},
+					"offset": {Type: "string", Description: "Optional pagination offset."},
+				},
+			},
+		},
+		{
+			Name:        "get_process_job",
+			Description: "Fetch a single asynchronous processing job by ID.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"job_id": {Type: "string", Description: "The async processing job ID."},
+				},
+				Required: []string{"job_id"},
+			},
+		},
+		{
+			Name:        "cancel_process_job",
+			Description: "Cancel an asynchronous processing job by ID.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"job_id": {Type: "string", Description: "The async processing job ID."},
+				},
+				Required: []string{"job_id"},
+			},
+		},
+		{
+			Name:        "rerun_process_job",
+			Description: "Re-submit a previous asynchronous processing job by ID.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"job_id": {Type: "string", Description: "The async processing job ID."},
+				},
+				Required: []string{"job_id"},
 			},
 		},
 		{

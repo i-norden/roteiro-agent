@@ -94,7 +94,9 @@ func TestToolsList(t *testing.T) {
 	}
 	for _, want := range []string{
 		"list_datasets", "get_dataset_info", "query_features", "get_feature",
-		"upload_dataset", "run_process", "run_pipeline", "convert_format",
+		"upload_dataset", "run_process", "preflight_process", "submit_process_job",
+		"submit_process_batch", "list_process_jobs", "get_process_job",
+		"cancel_process_job", "rerun_process_job", "run_pipeline", "convert_format",
 		"diff_datasets", "execute_sql", "list_spatial_tables", "get_duckdb_info",
 		"list_duckdb_datasets", "geocode", "reverse_geocode", "compute_route",
 		"compute_isochrone", "compute_route_matrix", "compute_service_area",
@@ -596,6 +598,16 @@ func TestToolsCall_RunProcess(t *testing.T) {
 	mux.HandleFunc("POST /api/process", func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&body)
+		if body["output_name"] != "parks_buffered" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing output_name"}`)
+			return
+		}
+		if body["output_format"] != "parquet" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing output_format"}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"output":"buffered_%s","feature_count":10}`, body["input"])
 	})
@@ -607,6 +619,8 @@ func TestToolsCall_RunProcess(t *testing.T) {
 			"operation": "buffer",
 			"input":     "parks",
 			"params":    map[string]interface{}{"distance": 500},
+			"output":    "parks_buffered",
+			"format":    "parquet",
 		},
 	})
 
@@ -619,5 +633,143 @@ func TestToolsCall_RunProcess(t *testing.T) {
 	text, _ := first["text"].(string)
 	if !strings.Contains(text, "buffered_parks") {
 		t.Errorf("response should contain output name, got: %s", text)
+	}
+}
+
+func TestToolsCall_PreflightProcess(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/process/preflight", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["output_name"] != "parks_buffered" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing output_name"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"valid":true,"resolved_params":{"distance":500}}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 23, map[string]interface{}{
+		"name": "preflight_process",
+		"arguments": map[string]interface{}{
+			"operation": "buffer",
+			"input":     "parks",
+			"params":    map[string]interface{}{"distance": 500},
+			"output":    "parks_buffered",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, `"valid": true`) {
+		t.Errorf("response should contain valid preflight, got: %s", text)
+	}
+}
+
+func TestToolsCall_SubmitProcessJob(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/process/jobs", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["output_name"] != "parks_buffered" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing output_name"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		fmt.Fprint(w, `{"id":"job_123","status":"queued"}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 24, map[string]interface{}{
+		"name": "submit_process_job",
+		"arguments": map[string]interface{}{
+			"operation": "buffer",
+			"input":     "parks",
+			"params":    map[string]interface{}{"distance": 500},
+			"output":    "parks_buffered",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "job_123") {
+		t.Errorf("response should contain job id, got: %s", text)
+	}
+}
+
+func TestToolsCall_ListProcessJobs(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/process/jobs", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("status") != "queued" || r.URL.Query().Get("limit") != "25" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing filters"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{"id":"job_123","status":"queued"}]`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 25, map[string]interface{}{
+		"name": "list_process_jobs",
+		"arguments": map[string]interface{}{
+			"status": "queued",
+			"limit":  25.0,
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "job_123") {
+		t.Errorf("response should contain job id, got: %s", text)
+	}
+}
+
+func TestToolsCall_CancelProcessJob(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/process/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("id") != "job_123" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 26, map[string]interface{}{
+		"name": "cancel_process_job",
+		"arguments": map[string]interface{}{
+			"job_id": "job_123",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "cancelled") {
+		t.Errorf("response should contain cancellation status, got: %s", text)
 	}
 }

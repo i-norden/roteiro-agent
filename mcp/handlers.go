@@ -38,6 +38,20 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		return handleUploadDataset(client, params)
 	case "run_process":
 		return handleRunProcess(client, params)
+	case "preflight_process":
+		return handlePreflightProcess(client, params)
+	case "submit_process_job":
+		return handleSubmitProcessJob(client, params)
+	case "submit_process_batch":
+		return handleSubmitProcessBatch(client, params)
+	case "list_process_jobs":
+		return handleListProcessJobs(client, params)
+	case "get_process_job":
+		return handleGetProcessJob(client, params)
+	case "cancel_process_job":
+		return handleCancelProcessJob(client, params)
+	case "rerun_process_job":
+		return handleRerunProcessJob(client, params)
 	case "run_pipeline":
 		return handleRunPipeline(client, params)
 	case "convert_format":
@@ -290,7 +304,102 @@ func handleUploadDataset(client *Client, params map[string]interface{}) (string,
 }
 
 func handleRunProcess(client *Client, params map[string]interface{}) (string, error) {
+	normalizeProcessPayload(params)
 	data, err := client.RunProcess(params)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handlePreflightProcess(client *Client, params map[string]interface{}) (string, error) {
+	normalizeProcessPayload(params)
+	data, err := client.PreflightProcess(params)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleSubmitProcessJob(client *Client, params map[string]interface{}) (string, error) {
+	normalizeProcessPayload(params)
+	data, err := client.SubmitProcessJob(params)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleSubmitProcessBatch(client *Client, params map[string]interface{}) (string, error) {
+	jobs, ok := params["jobs"].([]interface{})
+	if !ok || len(jobs) == 0 {
+		return "", fmt.Errorf("parameter jobs must be a non-empty array")
+	}
+	for i, item := range jobs {
+		job, ok := item.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("jobs[%d] must be an object", i)
+		}
+		req, ok := job["request"].(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("jobs[%d].request must be an object", i)
+		}
+		normalizeProcessPayload(req)
+	}
+	data, err := client.SubmitProcessBatch(params)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleListProcessJobs(client *Client, params map[string]interface{}) (string, error) {
+	qp := map[string]string{}
+	for _, key := range []string{"status", "search", "limit", "offset"} {
+		if v, ok := params[key]; ok {
+			s, err := stringify(v)
+			if err == nil && s != "" {
+				qp[key] = s
+			}
+		}
+	}
+	data, err := client.ListProcessJobs(qp)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleGetProcessJob(client *Client, params map[string]interface{}) (string, error) {
+	jobID, err := requireString(params, "job_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.GetProcessJob(jobID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleCancelProcessJob(client *Client, params map[string]interface{}) (string, error) {
+	jobID, err := requireString(params, "job_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.CancelProcessJob(jobID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleRerunProcessJob(client *Client, params map[string]interface{}) (string, error) {
+	jobID, err := requireString(params, "job_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.RerunProcessJob(jobID)
 	if err != nil {
 		return "", err
 	}
@@ -335,6 +444,22 @@ func handleConvertFormat(client *Client, params map[string]interface{}) (string,
 		return "", err
 	}
 	return formatJSON(data), nil
+}
+
+func normalizeProcessPayload(params map[string]interface{}) {
+	if _, ok := params["output_name"]; !ok {
+		if out, ok := params["output"].(string); ok && out != "" {
+			params["output_name"] = out
+		}
+	}
+	if _, ok := params["output_format"]; !ok {
+		if format, ok := params["format"].(string); ok && format != "" {
+			params["output_format"] = format
+		}
+	}
+	if _, ok := params["params"]; !ok || params["params"] == nil {
+		params["params"] = map[string]interface{}{}
+	}
 }
 
 func handleDiffDatasets(client *Client, params map[string]interface{}) (string, error) {

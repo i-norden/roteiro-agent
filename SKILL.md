@@ -43,17 +43,22 @@ Queries must be SELECT-only (read-only).
 
 ## Geoprocessing Operations
 
-Use `run_process` for single operations or `run_pipeline` for chains.
+Use `preflight_process` to validate and normalize a request first. Use `run_process` for synchronous execution, `submit_process_job` or `submit_process_batch` for async execution, and `run_pipeline` for chains.
 
-Always call `list_operations` first to fetch the live server operation catalog and parameter names. The current server supports a broad set including vector ops (`buffer`, `clip`, `intersect`, `difference`, `dissolve`, `sjoin`), geometry conversion (`centroid`, `convex_hull`, `feature_to_point`, `points_to_line`), stats (`spatial_stats`, `morans_i`, `hotspot`, `kernel_density`), interpolation (`interpolate_idw`, `ordinary_kriging`), validation (`validate`, `make_valid`, `validate_topology`), and optimization (`solve_vrp`, `p_median`, `mclp`).
+Always call `list_operations` first to fetch the live server operation catalog and parameter names. The server now returns rich metadata including category, UI availability, projected-CRS requirements, and typed parameter definitions.
 
 Important parameter names for common ops:
+- `geodesic_buffer` uses metric `distance` in meters
 - `clip` uses `mask`
 - `sjoin` uses `right` and `predicate`
 - `reproject` uses `from_crs` and `to_crs`
 - `dissolve` uses `group_by`
 
+Async process jobs expose queue state, phase, progress, and failure metadata via the `/api/process/jobs*` endpoints.
+
 Use `list_analysis_operations` for advanced analysis catalog endpoints under `/api/analysis/operations`.
+
+The async process workflow is available through `submit_process_job`, `submit_process_batch`, `list_process_jobs`, `get_process_job`, `cancel_process_job`, and `rerun_process_job`.
 
 ## Data Catalog & STAC
 

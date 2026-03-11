@@ -90,7 +90,14 @@ Add to `.mcp.json`:
 | `query_features` | Query with bbox, CQL2 filter, limit, properties |
 | `get_feature` | Single feature by ID |
 | `upload_dataset` | Upload a spatial data file |
-| `run_process` | Single geoprocessing operation (buffer, clip, simplify, etc.) |
+| `run_process` | Single synchronous geoprocessing operation |
+| `preflight_process` | Validate and normalize a processing request |
+| `submit_process_job` | Submit an async processing job |
+| `submit_process_batch` | Submit dependent async processing jobs |
+| `list_process_jobs` | List async processing jobs |
+| `get_process_job` | Inspect an async processing job |
+| `cancel_process_job` | Cancel an async processing job |
+| `rerun_process_job` | Re-submit an async processing job |
 | `run_pipeline` | Multi-step geoprocessing pipeline |
 | `convert_format` | Convert between formats (GeoJSON, Shapefile, etc.) |
 | `diff_datasets` | Compare two dataset versions |
