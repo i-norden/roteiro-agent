@@ -1,6 +1,6 @@
 # roteiro-agent
 
-MCP (Model Context Protocol) server for [Roteiro](roteiro.io) — a spatial data platform. Enables AI agents (Claude Desktop, VS Code, Cursor) to work with geospatial datasets, run geoprocessing operations, execute PostGIS queries, and more.
+MCP (Model Context Protocol) server for Roteiro, a spatial data platform. Enables AI agents (Claude Desktop, VS Code, Cursor) to work with geospatial datasets, run geoprocessing operations, execute SQL, and more.
 
 ## Installation
 
@@ -41,9 +41,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "cairn": {
+    "roteiro": {
       "command": "roteiro-agent",
-      "args": ["--server-url", "https://your-cairn-instance.com", "--api-key", "cairn_abc123"]
+      "args": ["--server-url", "https://your-roteiro-instance.com", "--api-key", "roteiro_abc123"]
     }
   }
 }
@@ -56,9 +56,9 @@ Add to `.vscode/mcp.json`:
 ```json
 {
   "servers": {
-    "cairn": {
+    "roteiro": {
       "command": "roteiro-agent",
-      "args": ["--server-url", "http://localhost:8080", "--api-key", "cairn_abc123"]
+      "args": ["--server-url", "http://localhost:8080", "--api-key", "roteiro_abc123"]
     }
   }
 }
@@ -71,9 +71,9 @@ Add to `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "cairn": {
+    "roteiro": {
       "command": "roteiro-agent",
-      "args": ["--server-url", "http://localhost:8080", "--api-key", "cairn_abc123"]
+      "args": ["--server-url", "http://localhost:8080", "--api-key", "roteiro_abc123"]
     }
   }
 }
@@ -105,6 +105,7 @@ Add to `.mcp.json`:
 | `compute_route_matrix` | Origin-destination time/distance matrix |
 | `compute_service_area` | Distance-based service area polygons |
 | `list_operations` | Available geoprocessing operations |
+| `list_analysis_operations` | Available advanced analysis operations |
 | `browse_catalog` | Browse the built-in data catalog |
 | `browse_catalog_enhanced` | Browse enhanced catalog with filters |
 | `get_catalog_entry` | Get enhanced catalog entry by ID |

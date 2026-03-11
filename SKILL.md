@@ -43,28 +43,17 @@ Queries must be SELECT-only (read-only).
 
 ## Geoprocessing Operations
 
-Use `run_process` for single operations or `run_pipeline` for chains. Available operations include:
+Use `run_process` for single operations or `run_pipeline` for chains.
 
-| Operation | Description | Key Parameters |
-|-----------|-------------|----------------|
-| `buffer` | Create buffer around features | `distance` (meters) |
-| `clip` | Clip features by a mask | `clip_dataset` |
-| `simplify` | Reduce geometry complexity | `tolerance` |
-| `reproject` | Change coordinate system | `target_crs` (e.g. "EPSG:4326") |
-| `centroid` | Calculate centroids | — |
-| `convex_hull` | Convex hull of features | — |
-| `intersection` | Intersect two datasets | `overlay_dataset` |
-| `union` | Union two datasets | `overlay_dataset` |
-| `difference` | Subtract one dataset from another | `overlay_dataset` |
-| `sjoin` | Spatial join | `join_dataset`, `predicate` |
-| `dissolve` | Merge features by attribute | `by` (field name) |
-| `voronoi` | Voronoi polygons | — |
-| `spatial_stats` | Descriptive statistics | — |
-| `morans_i` | Spatial autocorrelation | `attribute` |
-| `hotspot` | Getis-Ord Gi* hotspot analysis | `attribute` |
-| `kernel_density` | Density estimation | `bandwidth`, `cell_size` |
+Always call `list_operations` first to fetch the live server operation catalog and parameter names. The current server supports a broad set including vector ops (`buffer`, `clip`, `intersect`, `difference`, `dissolve`, `sjoin`), geometry conversion (`centroid`, `convex_hull`, `feature_to_point`, `points_to_line`), stats (`spatial_stats`, `morans_i`, `hotspot`, `kernel_density`), interpolation (`interpolate_idw`, `ordinary_kriging`), validation (`validate`, `make_valid`, `validate_topology`), and optimization (`solve_vrp`, `p_median`, `mclp`).
 
-Use `list_operations` to get the full list with parameter schemas.
+Important parameter names for common ops:
+- `clip` uses `mask`
+- `sjoin` uses `right` and `predicate`
+- `reproject` uses `from_crs` and `to_crs`
+- `dissolve` uses `group_by`
+
+Use `list_analysis_operations` for advanced analysis catalog endpoints under `/api/analysis/operations`.
 
 ## Data Catalog & STAC
 
@@ -115,7 +104,7 @@ GROUP BY r.name ORDER BY count DESC
 {
   "steps": [
     {"operation": "buffer", "input": "schools", "params": {"distance": 1000}},
-    {"operation": "intersection", "params": {"overlay_dataset": "residential_zones"}}
+    {"operation": "intersect", "params": {"mask": "residential_zones"}}
   ]
 }
 ```
