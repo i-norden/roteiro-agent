@@ -229,6 +229,18 @@ func (c *Client) RunProcess(payload interface{}) (json.RawMessage, error) {
 	return json.RawMessage(body), nil
 }
 
+// RunRasterProcess calls POST /api/raster/process.
+func (c *Client) RunRasterProcess(payload interface{}) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/raster/process", payload)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("POST /api/raster/process returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
 // PreflightProcess calls POST /api/process/preflight.
 func (c *Client) PreflightProcess(payload interface{}) (json.RawMessage, error) {
 	body, code, err := c.postJSON("/api/process/preflight", payload)

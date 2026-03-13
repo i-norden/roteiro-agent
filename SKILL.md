@@ -60,6 +60,10 @@ Use `list_analysis_operations` for advanced analysis catalog endpoints under `/a
 
 The async process workflow is available through `submit_process_job`, `submit_process_batch`, `list_process_jobs`, `get_process_job`, `cancel_process_job`, and `rerun_process_job`.
 
+For raster analysis, use `run_raster_process` with file paths when you need the generic `/api/raster/process` endpoint. Typical operation families include terrain, hydrology, distance/cost, spectral/change, classification, and raster-vector conversion.
+
+For registered raster datasets and JSON-returning raster endpoints, use `map_api` with operations such as `get_raster_info`, `get_raster_stats`, `get_raster_histogram`, `get_raster_dimensions`, `get_raster_values`, `raster_zonal_stats`, `export_raster_band`, `raster_contour`, `raster_viewshed`, `raster_profile`, and `raster_kde`.
+
 ## Data Catalog & STAC
 
 Roteiro includes a built-in data catalog and supports importing from remote STAC (SpatioTemporal Asset Catalog) servers.

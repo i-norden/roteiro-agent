@@ -91,6 +91,7 @@ Add to `.mcp.json`:
 | `get_feature` | Single feature by ID |
 | `upload_dataset` | Upload a spatial data file |
 | `run_process` | Single synchronous geoprocessing operation |
+| `run_raster_process` | Generic synchronous raster processing via file-path inputs |
 | `preflight_process` | Validate and normalize a processing request |
 | `submit_process_job` | Submit an async processing job |
 | `submit_process_batch` | Submit dependent async processing jobs |
@@ -125,7 +126,9 @@ Add to `.mcp.json`:
 | `import_stac_asset` | Import a STAC asset as a local dataset |
 | `search_stac` | Search local STAC with bbox/datetime/CQL2 filters |
 | `indoor_api` | Allowlisted Indoor GIS endpoint access (buildings/floors/spaces/navigation/analytics/sensors/booking/geofences/simulations). Mutations require `confirm=true`. |
-| `map_api` | Allowlisted map endpoint access (publish/unpublish/stats/embed config, raster metadata/values, OGC feature edit ops). Mutations require `confirm=true`. |
+| `map_api` | Allowlisted map endpoint access (publish/unpublish/stats/embed config, raster metadata/JSON analysis/export ops including contour/viewshed/profile/KDE, OGC feature edit ops). Mutations require `confirm=true`. |
+
+Use `list_operations` for the live vector-processing catalog. Raster operations do not currently have a live catalog endpoint, so `run_raster_process` documents the current backend families directly: terrain, hydrology, distance/cost, spectral/change, classification, and raster-vector conversion. For dataset-name-based raster JSON routes, `map_api` now also exposes contour, viewshed, profile, and KDE.
 
 ## Example Workflows
 

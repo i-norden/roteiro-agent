@@ -38,6 +38,8 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		return handleUploadDataset(client, params)
 	case "run_process":
 		return handleRunProcess(client, params)
+	case "run_raster_process":
+		return handleRunRasterProcess(client, params)
 	case "preflight_process":
 		return handlePreflightProcess(client, params)
 	case "submit_process_job":
@@ -204,6 +206,12 @@ var mapOperations = map[string]apiOperation{
 	"get_raster_histogram":    {Method: "GET", Path: "/raster/{name}/histogram"},
 	"get_raster_dimensions":   {Method: "GET", Path: "/raster/{name}/dimensions"},
 	"get_raster_values":       {Method: "GET", Path: "/raster/{name}/values"},
+	"raster_zonal_stats":      {Method: "POST", Path: "/raster/{name}/zonal-stats"},
+	"export_raster_band":      {Method: "POST", Path: "/raster/{name}/export"},
+	"raster_contour":          {Method: "POST", Path: "/raster/{name}/contour"},
+	"raster_viewshed":         {Method: "POST", Path: "/raster/{name}/viewshed"},
+	"raster_profile":          {Method: "POST", Path: "/raster/{name}/profile"},
+	"raster_kde":              {Method: "POST", Path: "/api/raster/kde"},
 	"create_feature":          {Method: "POST", Path: "/collections/{collection_id}/items", Mutating: true},
 	"update_feature":          {Method: "PUT", Path: "/collections/{collection_id}/items/{feature_id}", Mutating: true},
 	"delete_feature":          {Method: "DELETE", Path: "/collections/{collection_id}/items/{feature_id}", Mutating: true},
@@ -306,6 +314,15 @@ func handleUploadDataset(client *Client, params map[string]interface{}) (string,
 func handleRunProcess(client *Client, params map[string]interface{}) (string, error) {
 	normalizeProcessPayload(params)
 	data, err := client.RunProcess(params)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleRunRasterProcess(client *Client, params map[string]interface{}) (string, error) {
+	normalizeRasterProcessPayload(params)
+	data, err := client.RunRasterProcess(params)
 	if err != nil {
 		return "", err
 	}
@@ -457,6 +474,12 @@ func normalizeProcessPayload(params map[string]interface{}) {
 			params["output_format"] = format
 		}
 	}
+	if _, ok := params["params"]; !ok || params["params"] == nil {
+		params["params"] = map[string]interface{}{}
+	}
+}
+
+func normalizeRasterProcessPayload(params map[string]interface{}) {
 	if _, ok := params["params"]; !ok || params["params"] == nil {
 		params["params"] = map[string]interface{}{}
 	}

@@ -132,6 +132,21 @@ func AllTools() []Tool {
 			},
 		},
 		{
+			Name:        "run_raster_process",
+			Description: "Run a generic raster processing operation via /api/raster/process using file paths. Current backend operations include terrain (slope, aspect, profile_curvature, plan_curvature, general_curvature), hydrology (fill, flow_direction, flow_accumulation, watershed, stream_order, snap_pour_point, basin_labels), distance/cost tools, spectral/change tools, classification, and raster-vector conversion.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"operation":   {Type: "string", Description: "Raster operation name such as 'slope', 'fill', 'cost_distance', 'spectral_index', 'kmeans', 'raster_to_polygons', or 'rasterize'."},
+					"input_path":  {Type: "string", Description: "Input raster file path. Retrieve dataset paths with list_datasets or get_dataset_info when needed."},
+					"output_path": {Type: "string", Description: "Optional output GeoTIFF path for file-writing operations."},
+					"band":        {Type: "string", Description: "Optional raster band index."},
+					"params":      {Type: "object", Description: "Operation-specific parameters, matching the backend raster analysis docs."},
+				},
+				Required: []string{"operation"},
+			},
+		},
+		{
 			Name:        "preflight_process",
 			Description: "Validate and normalize a processing request via /api/process/preflight before executing it. Useful for checking required params, CRS constraints, and normalized dataset references.",
 			InputSchema: InputSchema{
@@ -613,6 +628,7 @@ func AllTools() []Tool {
 							"publish_map", "list_published_maps", "unpublish_map", "get_published_map_stats",
 							"update_map_embed_config", "get_public_map",
 							"get_raster_info", "get_raster_stats", "get_raster_histogram", "get_raster_dimensions", "get_raster_values",
+							"raster_zonal_stats", "export_raster_band", "raster_contour", "raster_viewshed", "raster_profile", "raster_kde",
 							"create_feature", "update_feature", "delete_feature",
 						},
 					},

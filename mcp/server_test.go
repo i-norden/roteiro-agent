@@ -94,7 +94,7 @@ func TestToolsList(t *testing.T) {
 	}
 	for _, want := range []string{
 		"list_datasets", "get_dataset_info", "query_features", "get_feature",
-		"upload_dataset", "run_process", "preflight_process", "submit_process_job",
+		"upload_dataset", "run_process", "run_raster_process", "preflight_process", "submit_process_job",
 		"submit_process_batch", "list_process_jobs", "get_process_job",
 		"cancel_process_job", "rerun_process_job", "run_pipeline", "convert_format",
 		"diff_datasets", "execute_sql", "list_spatial_tables", "get_duckdb_info",
@@ -670,6 +670,148 @@ func TestToolsCall_PreflightProcess(t *testing.T) {
 	text, _ := first["text"].(string)
 	if !strings.Contains(text, `"valid": true`) {
 		t.Errorf("response should contain valid preflight, got: %s", text)
+	}
+}
+
+func TestToolsCall_RunRasterProcess(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/raster/process", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["operation"] != "slope" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing operation"}`)
+			return
+		}
+		if _, ok := body["params"]; !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing params"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"width":2,"height":2,"data":[1,2,3,4]}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 231, map[string]interface{}{
+		"name": "run_raster_process",
+		"arguments": map[string]interface{}{
+			"operation":  "slope",
+			"input_path": "/data/dem.tif",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, `"width": 2`) {
+		t.Errorf("response should contain raster result, got: %s", text)
+	}
+}
+
+func TestToolsCall_MapAPIExportRasterBand(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /raster/{name}/export", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("name") != "elevation" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"message":"exported to /tmp/elevation.tif"}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 232, map[string]interface{}{
+		"name": "map_api",
+		"arguments": map[string]interface{}{
+			"operation": "export_raster_band",
+			"name":      "elevation",
+			"body": map[string]interface{}{
+				"output_path": "elevation.tif",
+				"band":        0,
+			},
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "exported to /tmp/elevation.tif") {
+		t.Errorf("response should contain export message, got: %s", text)
+	}
+}
+
+func TestToolsCall_MapAPIContour(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /raster/{name}/contour", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("name") != "elevation" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"type":"FeatureCollection","features":[]}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 233, map[string]interface{}{
+		"name": "map_api",
+		"arguments": map[string]interface{}{
+			"operation": "raster_contour",
+			"name":      "elevation",
+			"body": map[string]interface{}{
+				"interval": 10,
+			},
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "FeatureCollection") {
+		t.Errorf("response should contain contour GeoJSON, got: %s", text)
+	}
+}
+
+func TestToolsCall_MapAPIKDE(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/raster/kde", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"width":2,"height":2,"data":[0.1,0.2,0.3,0.4]}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 234, map[string]interface{}{
+		"name": "map_api",
+		"arguments": map[string]interface{}{
+			"operation": "raster_kde",
+			"body": map[string]interface{}{
+				"dataset":   "points",
+				"bandwidth": 50,
+			},
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, `"width": 2`) {
+		t.Errorf("response should contain kde grid, got: %s", text)
 	}
 }
 
