@@ -266,12 +266,7 @@ func handleQueryFeatures(client *Client, params map[string]interface{}) (string,
 	if err != nil {
 		return "", err
 	}
-	qp := map[string]string{}
-	for _, key := range []string{"bbox", "filter", "datetime", "limit", "offset", "properties", "sortby"} {
-		if v, ok := params[key].(string); ok && v != "" {
-			qp[key] = v
-		}
-	}
+	qp := stringLikeParams(params, "bbox", "filter", "datetime", "limit", "offset", "properties", "sortby")
 	// Default to a reasonable limit to avoid dumping huge responses.
 	if _, ok := qp["limit"]; !ok {
 		qp["limit"] = "10"
@@ -778,13 +773,23 @@ func stringify(v interface{}) (string, error) {
 	return "", fmt.Errorf("unsupported type")
 }
 
-func handleBrowseCatalog(client *Client, params map[string]interface{}) (string, error) {
+func stringLikeParams(params map[string]interface{}, keys ...string) map[string]string {
 	qp := map[string]string{}
-	for _, key := range []string{"search", "category", "limit", "offset"} {
-		if v, ok := params[key].(string); ok && v != "" {
-			qp[key] = v
+	for _, key := range keys {
+		v, ok := params[key]
+		if !ok {
+			continue
+		}
+		s, err := stringify(v)
+		if err == nil && s != "" {
+			qp[key] = s
 		}
 	}
+	return qp
+}
+
+func handleBrowseCatalog(client *Client, params map[string]interface{}) (string, error) {
+	qp := stringLikeParams(params, "search", "category", "limit", "offset")
 	data, err := client.BrowseCatalog(qp)
 	if err != nil {
 		return "", err
@@ -884,12 +889,7 @@ func handleBrowseSTACItems(client *Client, params map[string]interface{}) (strin
 	if err != nil {
 		return "", err
 	}
-	qp := map[string]string{}
-	for _, key := range []string{"bbox", "datetime"} {
-		if v, ok := params[key].(string); ok && v != "" {
-			qp[key] = v
-		}
-	}
+	qp := stringLikeParams(params, "bbox", "datetime")
 	data, err := client.BrowseSTACItems(collURL, qp)
 	if err != nil {
 		return "", err
@@ -915,12 +915,7 @@ func handleImportSTACAsset(client *Client, params map[string]interface{}) (strin
 }
 
 func handleSearchSTAC(client *Client, params map[string]interface{}) (string, error) {
-	qp := map[string]string{}
-	for _, key := range []string{"bbox", "datetime", "collections", "limit", "filter"} {
-		if v, ok := params[key].(string); ok && v != "" {
-			qp[key] = v
-		}
-	}
+	qp := stringLikeParams(params, "bbox", "datetime", "collections", "limit", "filter")
 	data, err := client.SearchSTAC(qp)
 	if err != nil {
 		return "", err

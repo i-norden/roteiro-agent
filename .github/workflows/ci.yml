@@ -9,13 +9,15 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
+          cache: true
 
       - name: Build
         run: go build ./...
@@ -24,4 +26,10 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test ./... -v -race
+        run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Enforce coverage floor
+        run: |
+          coverage=$(awk 'BEGIN{covered=0;total=0} /^mode:/{next} {total+=$2; if ($3 > 0) covered+=$2} END{if (total==0) {print "0.0"} else {printf "%.1f", (covered/total)*100}}' coverage.out)
+          echo "Total coverage: ${coverage}%"
+          awk -v cov="$coverage" 'BEGIN { if (cov + 0 < 50.0) { printf "coverage %.1f%% is below required 50.0%%\n", cov + 0; exit 1 } }'

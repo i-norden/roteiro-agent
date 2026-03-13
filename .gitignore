@@ -1,2 +1,4 @@
 .idea/
 roteiro-agent
+.gocache/
+coverage.out

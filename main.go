@@ -8,8 +8,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -17,32 +19,51 @@ import (
 )
 
 var version = "dev"
+var newServerRunner = func(client *mcp.Client) interface{ Run() error } {
+	return mcp.NewServer(client)
+}
+
+var errServerURLRequired = errors.New("server url required")
 
 func main() {
-	serverURL := flag.String("server-url", "", "Roteiro server base URL (e.g. http://localhost:8080)")
-	apiKey := flag.String("api-key", "", "Roteiro API key for authentication")
-	sessionCookie := flag.String("session-cookie", "", "Session cookie value for authentication (alternative to API key)")
-	showVersion := flag.Bool("version", false, "Print version and exit")
-	flag.Parse()
+	if err := run(os.Args[1:], os.Getenv, os.Stdout); err != nil {
+		if errors.Is(err, errServerURLRequired) {
+			log.Fatal("--server-url or ROTEIRO_SERVER_URL is required")
+		}
+		log.Fatalf("server error: %v", err)
+	}
+}
+
+func run(args []string, getenv func(string) string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("roteiro-agent", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	serverURL := fs.String("server-url", "", "Roteiro server base URL (e.g. http://localhost:8080)")
+	apiKey := fs.String("api-key", "", "Roteiro API key for authentication")
+	sessionCookie := fs.String("session-cookie", "", "Session cookie value for authentication (alternative to API key)")
+	showVersion := fs.Bool("version", false, "Print version and exit")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if *showVersion {
-		fmt.Printf("roteiro-agent %s\n", version)
-		os.Exit(0)
+		_, err := fmt.Fprintf(stdout, "roteiro-agent %s\n", version)
+		return err
 	}
 
 	if *serverURL == "" {
 		// Fall back to environment variable.
-		*serverURL = os.Getenv("ROTEIRO_SERVER_URL")
+		*serverURL = getenv("ROTEIRO_SERVER_URL")
 	}
 	if *apiKey == "" {
-		*apiKey = os.Getenv("ROTEIRO_API_KEY")
+		*apiKey = getenv("ROTEIRO_API_KEY")
 	}
 	if *sessionCookie == "" {
-		*sessionCookie = os.Getenv("ROTEIRO_SESSION_COOKIE")
+		*sessionCookie = getenv("ROTEIRO_SESSION_COOKIE")
 	}
 
 	if *serverURL == "" {
-		log.Fatal("--server-url or ROTEIRO_SERVER_URL is required")
+		return errServerURLRequired
 	}
 
 	client := mcp.NewClient(*serverURL, *apiKey)
@@ -50,8 +71,5 @@ func main() {
 		client.SessionCookie = *sessionCookie
 	}
 
-	server := mcp.NewServer(client)
-	if err := server.Run(); err != nil {
-		log.Fatalf("server error: %v", err)
-	}
+	return newServerRunner(client).Run()
 }
