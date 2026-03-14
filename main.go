@@ -41,6 +41,7 @@ func run(args []string, getenv func(string) string, stdout io.Writer) error {
 	serverURL := fs.String("server-url", "", "Roteiro server base URL (e.g. http://localhost:8080)")
 	apiKey := fs.String("api-key", "", "Roteiro API key for authentication")
 	sessionCookie := fs.String("session-cookie", "", "Session cookie value for authentication (alternative to API key)")
+	projectID := fs.String("project-id", "", "Optional default project scope sent as X-Project-ID")
 	showVersion := fs.Bool("version", false, "Print version and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -61,6 +62,9 @@ func run(args []string, getenv func(string) string, stdout io.Writer) error {
 	if *sessionCookie == "" {
 		*sessionCookie = getenv("ROTEIRO_SESSION_COOKIE")
 	}
+	if *projectID == "" {
+		*projectID = getenv("ROTEIRO_PROJECT_ID")
+	}
 
 	if *serverURL == "" {
 		return errServerURLRequired
@@ -70,6 +74,7 @@ func run(args []string, getenv func(string) string, stdout io.Writer) error {
 	if *sessionCookie != "" {
 		client.SessionCookie = *sessionCookie
 	}
+	client.ProjectID = *projectID
 
 	return newServerRunner(client).Run()
 }

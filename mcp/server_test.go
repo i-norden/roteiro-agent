@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -177,6 +179,21 @@ func TestToolsCall_QueryFeatures(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+		if got := r.Header.Get("X-Project-ID"); got != "42" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"project=%s"}`, got)
+			return
+		}
+		if got := r.URL.Query().Get("bbox-crs"); got != "EPSG:4326" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"bbox-crs=%s"}`, got)
+			return
+		}
+		if got := r.URL.Query().Get("crs"); got != "EPSG:3857" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"crs=%s"}`, got)
+			return
+		}
 		limit := r.URL.Query().Get("limit")
 		if limit == "" {
 			limit = "10"
@@ -190,6 +207,9 @@ func TestToolsCall_QueryFeatures(t *testing.T) {
 		"name": "query_features",
 		"arguments": map[string]interface{}{
 			"collection_id": "buildings",
+			"bbox_crs":      "EPSG:4326",
+			"crs":           "EPSG:3857",
+			"project_id":    42.0,
 			"limit":         "5",
 		},
 	})
@@ -203,6 +223,62 @@ func TestToolsCall_QueryFeatures(t *testing.T) {
 	text, _ := first["text"].(string)
 	if !strings.Contains(text, "FeatureCollection") {
 		t.Errorf("response should contain 'FeatureCollection', got: %s", text)
+	}
+}
+
+func TestToolsCall_UploadDatasetScoped(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "roads.geojson")
+	if err := os.WriteFile(filePath, []byte(`{"type":"FeatureCollection","features":[]}`), 0o600); err != nil {
+		t.Fatalf("write temp upload file: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /upload", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Project-ID"); got != "42" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"project=%s"}`, got)
+			return
+		}
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"parse=%v"}`, err)
+			return
+		}
+		if got := r.FormValue("name"); got != "roads" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"name=%s"}`, got)
+			return
+		}
+		if got := r.FormValue("project_id"); got != "42" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"project_id=%s"}`, got)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"name":"roads","path":"/tmp/roads.geojson","format":"geojson"}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 240, map[string]interface{}{
+		"name": "upload_dataset",
+		"arguments": map[string]interface{}{
+			"file_path":  filePath,
+			"name":       "roads",
+			"project_id": 42.0,
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "roads") {
+		t.Errorf("response should contain dataset name, got: %s", text)
 	}
 }
 
@@ -562,11 +638,20 @@ func TestToolsCall_ImportSTACAsset(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/stac/import", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			AssetURL string `json:"asset_url"`
-			Name     string `json:"name"`
-			Format   string `json:"format"`
+			AssetURL   string `json:"asset_url"`
+			Name       string `json:"name"`
+			Format     string `json:"format"`
+			Namespace  string `json:"namespace"`
+			Collection string `json:"collection"`
+			CatalogURL string `json:"catalog_url"`
+			ProjectID  int64  `json:"project_id"`
 		}
 		json.NewDecoder(r.Body).Decode(&body)
+		if body.ProjectID != 42 || body.Namespace != "demo" || body.Collection != "buildings" || body.CatalogURL != "https://example.com/stac" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"bad-body"}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		fmt.Fprintf(w, `{"name":"%s","path":"data/%s.geojson","format":"geojson"}`, body.Name, body.Name)
@@ -576,8 +661,12 @@ func TestToolsCall_ImportSTACAsset(t *testing.T) {
 	resp := sendRequest(t, srv, "tools/call", 12, map[string]interface{}{
 		"name": "import_stac_asset",
 		"arguments": map[string]interface{}{
-			"asset_url": "https://example.com/buildings.geojson",
-			"name":      "buildings",
+			"asset_url":   "https://example.com/buildings.geojson",
+			"name":        "buildings",
+			"namespace":   "demo",
+			"collection":  "buildings",
+			"catalog_url": "https://example.com/stac",
+			"project_id":  42.0,
 		},
 	})
 
@@ -590,6 +679,47 @@ func TestToolsCall_ImportSTACAsset(t *testing.T) {
 	text, _ := first["text"].(string)
 	if !strings.Contains(text, "buildings") {
 		t.Errorf("response should contain 'buildings', got: %s", text)
+	}
+}
+
+func TestToolsCall_ImportFromCatalogScoped(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/catalog/import", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["catalog_id"] != "catalog-123" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing catalog_id"}`)
+			return
+		}
+		if body["project_id"] != float64(42) {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing project_id"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		fmt.Fprint(w, `{"name":"roads","status":"pending"}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 241, map[string]interface{}{
+		"name": "import_from_catalog",
+		"arguments": map[string]interface{}{
+			"catalog_id": "catalog-123",
+			"project_id": 42.0,
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, `"status": "pending"`) {
+		t.Errorf("response should contain pending status, got: %s", text)
 	}
 }
 
@@ -608,6 +738,11 @@ func TestToolsCall_RunProcess(t *testing.T) {
 			fmt.Fprint(w, `{"error":"missing output_format"}`)
 			return
 		}
+		if body["project_id"] != float64(42) {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing project_id"}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"output":"buffered_%s","feature_count":10}`, body["input"])
 	})
@@ -616,11 +751,12 @@ func TestToolsCall_RunProcess(t *testing.T) {
 	resp := sendRequest(t, srv, "tools/call", 10, map[string]interface{}{
 		"name": "run_process",
 		"arguments": map[string]interface{}{
-			"operation": "buffer",
-			"input":     "parks",
-			"params":    map[string]interface{}{"distance": 500},
-			"output":    "parks_buffered",
-			"format":    "parquet",
+			"operation":  "buffer",
+			"input":      "parks",
+			"params":     map[string]interface{}{"distance": 500},
+			"output":     "parks_buffered",
+			"format":     "parquet",
+			"project_id": 42.0,
 		},
 	})
 
@@ -646,6 +782,11 @@ func TestToolsCall_PreflightProcess(t *testing.T) {
 			fmt.Fprint(w, `{"error":"missing output_name"}`)
 			return
 		}
+		if body["project_id"] != float64(42) {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing project_id"}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"valid":true,"resolved_params":{"distance":500}}`)
 	})
@@ -654,10 +795,11 @@ func TestToolsCall_PreflightProcess(t *testing.T) {
 	resp := sendRequest(t, srv, "tools/call", 23, map[string]interface{}{
 		"name": "preflight_process",
 		"arguments": map[string]interface{}{
-			"operation": "buffer",
-			"input":     "parks",
-			"params":    map[string]interface{}{"distance": 500},
-			"output":    "parks_buffered",
+			"operation":  "buffer",
+			"input":      "parks",
+			"params":     map[string]interface{}{"distance": 500},
+			"output":     "parks_buffered",
+			"project_id": 42.0,
 		},
 	})
 
@@ -825,6 +967,11 @@ func TestToolsCall_SubmitProcessJob(t *testing.T) {
 			fmt.Fprint(w, `{"error":"missing output_name"}`)
 			return
 		}
+		if body["project_id"] != float64(42) {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing project_id"}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		fmt.Fprint(w, `{"id":"job_123","status":"queued"}`)
@@ -834,10 +981,11 @@ func TestToolsCall_SubmitProcessJob(t *testing.T) {
 	resp := sendRequest(t, srv, "tools/call", 24, map[string]interface{}{
 		"name": "submit_process_job",
 		"arguments": map[string]interface{}{
-			"operation": "buffer",
-			"input":     "parks",
-			"params":    map[string]interface{}{"distance": 500},
-			"output":    "parks_buffered",
+			"operation":  "buffer",
+			"input":      "parks",
+			"params":     map[string]interface{}{"distance": 500},
+			"output":     "parks_buffered",
+			"project_id": 42.0,
 		},
 	})
 

@@ -48,11 +48,13 @@ func TestRunUsesEnvironmentFallbacks(t *testing.T) {
 		baseURL       string
 		apiKey        string
 		sessionCookie string
+		projectID     string
 	}
 	newServerRunner = func(client *mcp.Client) interface{ Run() error } {
 		got.baseURL = client.BaseURL
 		got.apiKey = client.APIKey
 		got.sessionCookie = client.SessionCookie
+		got.projectID = client.ProjectID
 		return stubRunner{}
 	}
 	t.Cleanup(func() {
@@ -63,6 +65,7 @@ func TestRunUsesEnvironmentFallbacks(t *testing.T) {
 		"ROTEIRO_SERVER_URL":     "https://example.test/",
 		"ROTEIRO_API_KEY":        "api-from-env",
 		"ROTEIRO_SESSION_COOKIE": "session=from-env",
+		"ROTEIRO_PROJECT_ID":     "42",
 	}
 	if err := run(nil, func(key string) string { return env[key] }, io.Discard); err != nil {
 		t.Fatalf("run returned error: %v", err)
@@ -77,6 +80,9 @@ func TestRunUsesEnvironmentFallbacks(t *testing.T) {
 	if got.sessionCookie != "session=from-env" {
 		t.Fatalf("SessionCookie = %q, want %q", got.sessionCookie, "session=from-env")
 	}
+	if got.projectID != "42" {
+		t.Fatalf("ProjectID = %q, want %q", got.projectID, "42")
+	}
 }
 
 func TestRunFlagsOverrideEnvironment(t *testing.T) {
@@ -85,11 +91,13 @@ func TestRunFlagsOverrideEnvironment(t *testing.T) {
 		baseURL       string
 		apiKey        string
 		sessionCookie string
+		projectID     string
 	}
 	newServerRunner = func(client *mcp.Client) interface{ Run() error } {
 		got.baseURL = client.BaseURL
 		got.apiKey = client.APIKey
 		got.sessionCookie = client.SessionCookie
+		got.projectID = client.ProjectID
 		return stubRunner{}
 	}
 	t.Cleanup(func() {
@@ -100,11 +108,13 @@ func TestRunFlagsOverrideEnvironment(t *testing.T) {
 		"ROTEIRO_SERVER_URL":     "https://env.example.test",
 		"ROTEIRO_API_KEY":        "api-from-env",
 		"ROTEIRO_SESSION_COOKIE": "session=from-env",
+		"ROTEIRO_PROJECT_ID":     "7",
 	}
 	args := []string{
 		"--server-url", "https://flag.example.test/",
 		"--api-key", "api-from-flag",
 		"--session-cookie", "session=from-flag",
+		"--project-id", "99",
 	}
 	if err := run(args, func(key string) string { return env[key] }, io.Discard); err != nil {
 		t.Fatalf("run returned error: %v", err)
@@ -118,6 +128,9 @@ func TestRunFlagsOverrideEnvironment(t *testing.T) {
 	}
 	if got.sessionCookie != "session=from-flag" {
 		t.Fatalf("SessionCookie = %q, want %q", got.sessionCookie, "session=from-flag")
+	}
+	if got.projectID != "99" {
+		t.Fatalf("ProjectID = %q, want %q", got.projectID, "99")
 	}
 }
 

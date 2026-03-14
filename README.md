@@ -19,7 +19,7 @@ go build -o roteiro-agent .
 ## Usage
 
 ```bash
-roteiro-agent --server-url http://localhost:8080 --api-key Roteiro_abc123
+roteiro-agent --server-url http://localhost:8080 --api-key Roteiro_abc123 --project-id 42
 ```
 
 The server communicates via JSON-RPC 2.0 over stdio (stdin/stdout), following the MCP specification.
@@ -31,6 +31,9 @@ The server communicates via JSON-RPC 2.0 over stdio (stdin/stdout), following th
 | `ROTEIRO_SERVER_URL` | `--server-url` | Roteiro server base URL |
 | `ROTEIRO_API_KEY` | `--api-key` | Roteiro API key |
 | `ROTEIRO_SESSION_COOKIE` | `--session-cookie` | Session cookie (alternative to API key) |
+| `ROTEIRO_PROJECT_ID` | `--project-id` | Optional default project scope sent as `X-Project-ID` |
+
+When `--project-id` or `ROTEIRO_PROJECT_ID` is set, the agent scopes compatible requests to that project by default. Individual tool calls can also override the scope with a `project_id` argument.
 
 ## MCP Client Configuration
 
@@ -87,9 +90,9 @@ Add to `.mcp.json`:
 | `get_dataset_info` | Dataset schema, CRS, bounds, feature count |
 | `get_dataset_schema` | Field names and types |
 | `get_dataset_profile` | Statistical profile of a dataset |
-| `query_features` | Query with bbox, CQL2 filter, limit, properties |
+| `query_features` | Query with bbox, bbox CRS, response CRS, CQL2 filter, limit, properties |
 | `get_feature` | Single feature by ID |
-| `upload_dataset` | Upload a spatial data file |
+| `upload_dataset` | Upload a spatial data file, optionally naming it and attaching it to a project |
 | `run_process` | Single synchronous geoprocessing operation |
 | `run_raster_process` | Generic synchronous raster processing via file-path inputs |
 | `preflight_process` | Validate and normalize a processing request |
@@ -119,11 +122,11 @@ Add to `.mcp.json`:
 | `get_catalog_entry` | Get enhanced catalog entry by ID |
 | `list_catalog_categories` | List catalog categories |
 | `list_catalog_tags` | List catalog tags |
-| `import_from_catalog` | Import a dataset from the data catalog |
+| `import_from_catalog` | Import a dataset from the data catalog, optionally into a project |
 | `browse_stac_catalog` | Browse a remote STAC catalog |
 | `browse_stac_collections` | List collections in a remote STAC catalog |
 | `browse_stac_items` | List items in a remote STAC collection |
-| `import_stac_asset` | Import a STAC asset as a local dataset |
+| `import_stac_asset` | Import a STAC asset as a local dataset, optionally with namespace/catalog metadata and project attachment |
 | `search_stac` | Search local STAC with bbox/datetime/CQL2 filters |
 | `indoor_api` | Allowlisted Indoor GIS endpoint access (buildings/floors/spaces/navigation/analytics/sensors/booking/geofences/simulations). Mutations require `confirm=true`. |
 | `map_api` | Allowlisted map endpoint access (publish/unpublish/stats/embed config, raster metadata/JSON analysis/export ops including contour/viewshed/profile/KDE/slope/aspect, geodesic area/length, raster classification via k-means/ISODATA/max-likelihood/random-forest, OGC feature edit ops). Mutations require `confirm=true`. |

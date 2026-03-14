@@ -323,7 +323,7 @@ func TestNormalizeProcessPayload(t *testing.T) {
 		"output": "buffered_roads",
 		"format": "parquet",
 	}
-	normalizeProcessPayload(params)
+	normalizeProcessPayload(params, "42")
 
 	if got := params["output_name"]; got != "buffered_roads" {
 		t.Fatalf("output_name = %v, want buffered_roads", got)
@@ -333,6 +333,30 @@ func TestNormalizeProcessPayload(t *testing.T) {
 	}
 	if _, ok := params["params"].(map[string]interface{}); !ok {
 		t.Fatalf("params = %#v, want initialized params object", params["params"])
+	}
+	if got := params["project_id"]; got != int64(42) {
+		t.Fatalf("project_id = %v, want 42", got)
+	}
+}
+
+func TestOptionalProjectIDAndEnsureProjectID(t *testing.T) {
+	projectID, err := optionalProjectID(map[string]interface{}{"project_id": 7.0})
+	if err != nil {
+		t.Fatalf("optionalProjectID returned error: %v", err)
+	}
+	if projectID != "7" {
+		t.Fatalf("projectID = %q, want 7", projectID)
+	}
+
+	params := map[string]interface{}{}
+	ensureProjectID(params, "15")
+	if got := params["project_id"]; got != int64(15) {
+		t.Fatalf("project_id = %v, want 15", got)
+	}
+
+	ensureProjectID(params, "19")
+	if got := params["project_id"]; got != int64(15) {
+		t.Fatalf("project_id should remain unchanged, got %v", got)
 	}
 }
 

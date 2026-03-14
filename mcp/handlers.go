@@ -21,6 +21,12 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		params = map[string]interface{}{}
 	}
 
+	projectID, err := optionalProjectID(params)
+	if err != nil {
+		return "", err
+	}
+	client = client.WithProjectID(projectID)
+
 	switch name {
 	case "list_datasets":
 		return handleListDatasets(client)
@@ -275,6 +281,16 @@ func handleQueryFeatures(client *Client, params map[string]interface{}) (string,
 		return "", err
 	}
 	qp := stringLikeParams(params, "bbox", "filter", "datetime", "limit", "offset", "properties", "sortby")
+	if v, ok := params["bbox_crs"]; ok {
+		if s, err := stringify(v); err == nil && s != "" {
+			qp["bbox-crs"] = s
+		}
+	}
+	if v, ok := params["crs"]; ok {
+		if s, err := stringify(v); err == nil && s != "" {
+			qp["crs"] = s
+		}
+	}
 	// Default to a reasonable limit to avoid dumping huge responses.
 	if _, ok := qp["limit"]; !ok {
 		qp["limit"] = "10"
@@ -307,7 +323,8 @@ func handleUploadDataset(client *Client, params map[string]interface{}) (string,
 	if err != nil {
 		return "", err
 	}
-	data, err := client.UploadFile(path)
+	name, _ := optionalStringLike(params, "name")
+	data, err := client.UploadFile(path, name, client.ProjectID)
 	if err != nil {
 		return "", err
 	}
@@ -315,7 +332,7 @@ func handleUploadDataset(client *Client, params map[string]interface{}) (string,
 }
 
 func handleRunProcess(client *Client, params map[string]interface{}) (string, error) {
-	normalizeProcessPayload(params)
+	normalizeProcessPayload(params, client.ProjectID)
 	data, err := client.RunProcess(params)
 	if err != nil {
 		return "", err
@@ -333,7 +350,7 @@ func handleRunRasterProcess(client *Client, params map[string]interface{}) (stri
 }
 
 func handlePreflightProcess(client *Client, params map[string]interface{}) (string, error) {
-	normalizeProcessPayload(params)
+	normalizeProcessPayload(params, client.ProjectID)
 	data, err := client.PreflightProcess(params)
 	if err != nil {
 		return "", err
@@ -342,7 +359,7 @@ func handlePreflightProcess(client *Client, params map[string]interface{}) (stri
 }
 
 func handleSubmitProcessJob(client *Client, params map[string]interface{}) (string, error) {
-	normalizeProcessPayload(params)
+	normalizeProcessPayload(params, client.ProjectID)
 	data, err := client.SubmitProcessJob(params)
 	if err != nil {
 		return "", err
@@ -364,7 +381,7 @@ func handleSubmitProcessBatch(client *Client, params map[string]interface{}) (st
 		if !ok {
 			return "", fmt.Errorf("jobs[%d].request must be an object", i)
 		}
-		normalizeProcessPayload(req)
+		normalizeProcessPayload(req, client.ProjectID)
 	}
 	data, err := client.SubmitProcessBatch(params)
 	if err != nil {
@@ -441,6 +458,7 @@ func handleRunPipeline(client *Client, params map[string]interface{}) (string, e
 			}
 		}
 	}
+	ensureProjectID(params, client.ProjectID)
 	data, err := client.RunPipeline(params)
 	if err != nil {
 		return "", err
@@ -459,6 +477,7 @@ func handleConvertFormat(client *Client, params map[string]interface{}) (string,
 			params["output_name"] = out
 		}
 	}
+	ensureProjectID(params, client.ProjectID)
 	data, err := client.ConvertFormat(params)
 	if err != nil {
 		return "", err
@@ -466,7 +485,7 @@ func handleConvertFormat(client *Client, params map[string]interface{}) (string,
 	return formatJSON(data), nil
 }
 
-func normalizeProcessPayload(params map[string]interface{}) {
+func normalizeProcessPayload(params map[string]interface{}, projectID string) {
 	if _, ok := params["output_name"]; !ok {
 		if out, ok := params["output"].(string); ok && out != "" {
 			params["output_name"] = out
@@ -480,6 +499,7 @@ func normalizeProcessPayload(params map[string]interface{}) {
 	if _, ok := params["params"]; !ok || params["params"] == nil {
 		params["params"] = map[string]interface{}{}
 	}
+	ensureProjectID(params, projectID)
 }
 
 func normalizeRasterProcessPayload(params map[string]interface{}) {
@@ -781,6 +801,40 @@ func stringify(v interface{}) (string, error) {
 	return "", fmt.Errorf("unsupported type")
 }
 
+func optionalStringLike(params map[string]interface{}, key string) (string, error) {
+	v, ok := params[key]
+	if !ok || v == nil {
+		return "", nil
+	}
+	return stringify(v)
+}
+
+func optionalProjectID(params map[string]interface{}) (string, error) {
+	v, ok := params["project_id"]
+	if !ok || v == nil {
+		return "", nil
+	}
+	switch raw := v.(type) {
+	case string:
+		return raw, nil
+	case float64:
+		return strconv.FormatFloat(raw, 'f', -1, 64), nil
+	default:
+		return "", fmt.Errorf("parameter project_id must be a string or number")
+	}
+}
+
+func ensureProjectID(params map[string]interface{}, projectID string) {
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" {
+		return
+	}
+	if _, ok := params["project_id"]; ok {
+		return
+	}
+	params["project_id"] = projectIDJSONValue(projectID)
+}
+
 func stringLikeParams(params map[string]interface{}, keys ...string) map[string]string {
 	qp := map[string]string{}
 	for _, key := range keys {
@@ -861,7 +915,7 @@ func handleImportFromCatalog(client *Client, params map[string]interface{}) (str
 	if err != nil {
 		return "", err
 	}
-	data, err := client.ImportFromCatalog(catalogID)
+	data, err := client.ImportFromCatalog(catalogID, client.ProjectID)
 	if err != nil {
 		return "", err
 	}
@@ -915,7 +969,15 @@ func handleImportSTACAsset(client *Client, params map[string]interface{}) (strin
 		return "", err
 	}
 	format, _ := params["format"].(string)
-	data, err := client.ImportSTACAsset(assetURL, name, format)
+	namespace, _ := optionalStringLike(params, "namespace")
+	collection, _ := optionalStringLike(params, "collection")
+	catalogURL, _ := optionalStringLike(params, "catalog_url")
+	payload := buildSTACImportPayload(assetURL, name, format, client.ProjectID, map[string]string{
+		"namespace":   namespace,
+		"collection":  collection,
+		"catalog_url": catalogURL,
+	})
+	data, err := client.ImportSTACAsset(payload)
 	if err != nil {
 		return "", err
 	}

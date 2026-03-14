@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,6 +22,7 @@ type Client struct {
 	BaseURL       string
 	APIKey        string
 	SessionCookie string
+	ProjectID     string
 	HTTPClient    *http.Client
 }
 
@@ -42,6 +44,9 @@ func (c *Client) do(req *http.Request) ([]byte, int, error) {
 	if c.SessionCookie != "" {
 		req.Header.Set("Cookie", c.SessionCookie)
 	}
+	if c.ProjectID != "" {
+		req.Header.Set("X-Project-ID", c.ProjectID)
+	}
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, 0, err
@@ -52,6 +57,18 @@ func (c *Client) do(req *http.Request) ([]byte, int, error) {
 		return nil, resp.StatusCode, err
 	}
 	return body, resp.StatusCode, nil
+}
+
+// WithProjectID returns a shallow clone of the client with an overridden
+// project scope. An empty value preserves the existing scope.
+func (c *Client) WithProjectID(projectID string) *Client {
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" || projectID == c.ProjectID {
+		return c
+	}
+	clone := *c
+	clone.ProjectID = projectID
+	return &clone
 }
 
 func (c *Client) get(path string, query url.Values) ([]byte, int, error) {
@@ -184,7 +201,7 @@ func (c *Client) GetFeature(collectionID, featureID string) (json.RawMessage, er
 }
 
 // UploadFile calls POST /upload with a multipart file upload.
-func (c *Client) UploadFile(filePath string) (json.RawMessage, error) {
+func (c *Client) UploadFile(filePath, name, projectID string) (json.RawMessage, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
@@ -199,6 +216,16 @@ func (c *Client) UploadFile(filePath string) (json.RawMessage, error) {
 	}
 	if _, err := io.Copy(part, f); err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(name) != "" {
+		if err := w.WriteField("name", name); err != nil {
+			return nil, err
+		}
+	}
+	if strings.TrimSpace(projectID) != "" {
+		if err := w.WriteField("project_id", projectID); err != nil {
+			return nil, err
+		}
 	}
 	w.Close()
 
@@ -625,8 +652,12 @@ func (c *Client) ListCatalogTags(limit string) (json.RawMessage, error) {
 }
 
 // ImportFromCatalog calls POST /api/catalog/import.
-func (c *Client) ImportFromCatalog(catalogID string) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/catalog/import", map[string]string{"catalog_id": catalogID})
+func (c *Client) ImportFromCatalog(catalogID, projectID string) (json.RawMessage, error) {
+	payload := map[string]interface{}{"catalog_id": catalogID}
+	if strings.TrimSpace(projectID) != "" {
+		payload["project_id"] = projectIDJSONValue(projectID)
+	}
+	body, code, err := c.postJSON("/api/catalog/import", payload)
 	if err != nil {
 		return nil, err
 	}
@@ -679,14 +710,7 @@ func (c *Client) BrowseSTACItems(collectionURL string, params map[string]string)
 }
 
 // ImportSTACAsset calls POST /api/stac/import.
-func (c *Client) ImportSTACAsset(assetURL, name, format string) (json.RawMessage, error) {
-	payload := map[string]string{
-		"asset_url": assetURL,
-		"name":      name,
-	}
-	if format != "" {
-		payload["format"] = format
-	}
+func (c *Client) ImportSTACAsset(payload map[string]interface{}) (json.RawMessage, error) {
 	body, code, err := c.postJSON("/api/stac/import", payload)
 	if err != nil {
 		return nil, err
@@ -695,6 +719,36 @@ func (c *Client) ImportSTACAsset(assetURL, name, format string) (json.RawMessage
 		return nil, fmt.Errorf("POST /api/stac/import returned %d: %s", code, truncate(body, 500))
 	}
 	return json.RawMessage(body), nil
+}
+
+func buildSTACImportPayload(assetURL, name, format, projectID string, extras map[string]string) map[string]interface{} {
+	payload := map[string]interface{}{
+		"asset_url": assetURL,
+		"name":      name,
+	}
+	if format != "" {
+		payload["format"] = format
+	}
+	if strings.TrimSpace(projectID) != "" {
+		payload["project_id"] = projectIDJSONValue(projectID)
+	}
+	for key, value := range extras {
+		if strings.TrimSpace(value) != "" {
+			payload[key] = value
+		}
+	}
+	return payload
+}
+
+func projectIDJSONValue(projectID string) interface{} {
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" {
+		return nil
+	}
+	if n, err := strconv.ParseInt(projectID, 10, 64); err == nil {
+		return n
+	}
+	return projectID
 }
 
 // SearchSTAC calls GET /stac/search.

@@ -29,8 +29,13 @@ func AllTools() []Tool {
 	return []Tool{
 		{
 			Name:        "list_datasets",
-			Description: "List all datasets registered in Roteiro with their names, formats, feature counts, and geometry types.",
-			InputSchema: InputSchema{Type: "object"},
+			Description: "List all datasets registered in Roteiro with their names, formats, feature counts, and geometry types. Optionally scope the listing to a project.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"project_id": {Type: "string", Description: "Optional project scope override. Also configurable globally via --project-id."},
+				},
+			},
 		},
 		{
 			Name:        "get_dataset_info",
@@ -39,6 +44,7 @@ func AllTools() []Tool {
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"collection_id": {Type: "string", Description: "The dataset/collection identifier."},
+					"project_id":    {Type: "string", Description: "Optional project scope override. Also configurable globally via --project-id."},
 				},
 				Required: []string{"collection_id"},
 			},
@@ -73,12 +79,15 @@ func AllTools() []Tool {
 				Properties: map[string]PropertySchema{
 					"collection_id": {Type: "string", Description: "The collection identifier."},
 					"bbox":          {Type: "string", Description: "Bounding box filter as 'west,south,east,north' (EPSG:4326)."},
+					"bbox_crs":      {Type: "string", Description: "Optional CRS identifier for the bbox coordinates, forwarded as `bbox-crs`."},
+					"crs":           {Type: "string", Description: "Optional CRS identifier for returned geometries."},
 					"filter":        {Type: "string", Description: "CQL2 filter expression (e.g. \"population > 10000\")."},
 					"datetime":      {Type: "string", Description: "Temporal filter as RFC3339 instant or interval 'start/end'."},
 					"limit":         {Type: "string", Description: "Maximum number of features to return (default 10)."},
 					"offset":        {Type: "string", Description: "Number of features to skip for pagination."},
 					"properties":    {Type: "string", Description: "Comma-separated list of properties to include in the response."},
 					"sortby":        {Type: "string", Description: "Property to sort by, prefix with '-' for descending."},
+					"project_id":    {Type: "string", Description: "Optional project scope override. Also configurable globally via --project-id."},
 				},
 				Required: []string{"collection_id"},
 			},
@@ -101,7 +110,9 @@ func AllTools() []Tool {
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
-					"file_path": {Type: "string", Description: "Local file path to the spatial data file to upload."},
+					"file_path":  {Type: "string", Description: "Local file path to the spatial data file to upload."},
+					"name":       {Type: "string", Description: "Optional dataset name. Defaults to the file stem if omitted."},
+					"project_id": {Type: "string", Description: "Optional project to attach the uploaded dataset to. Also configurable globally via --project-id."},
 				},
 				Required: []string{"file_path"},
 			},
@@ -127,6 +138,7 @@ func AllTools() []Tool {
 					"output_format": {Type: "string", Description: "Requested output format (for example 'geojson', 'parquet', or 'csv')."},
 					"format":        {Type: "string", Description: "Compatibility alias for 'output_format'."},
 					"register":      {Type: "boolean", Description: "Whether to register the result as a dataset."},
+					"project_id":    {Type: "string", Description: "Optional project scope override and output attachment target."},
 				},
 				Required: []string{"operation"},
 			},
@@ -161,6 +173,7 @@ func AllTools() []Tool {
 					"output_format": {Type: "string", Description: "Requested output format."},
 					"format":        {Type: "string", Description: "Compatibility alias for 'output_format'."},
 					"register":      {Type: "boolean", Description: "Whether the eventual result should be registered as a dataset."},
+					"project_id":    {Type: "string", Description: "Optional project scope override and output attachment target."},
 				},
 				Required: []string{"operation"},
 			},
@@ -180,6 +193,7 @@ func AllTools() []Tool {
 					"output_format": {Type: "string", Description: "Requested output format."},
 					"format":        {Type: "string", Description: "Compatibility alias for 'output_format'."},
 					"register":      {Type: "boolean", Description: "Whether to register the result as a dataset."},
+					"project_id":    {Type: "string", Description: "Optional project scope override and output attachment target."},
 				},
 				Required: []string{"operation"},
 			},
@@ -192,7 +206,7 @@ func AllTools() []Tool {
 				Properties: map[string]PropertySchema{
 					"jobs": {
 						Type:        "array",
-						Description: "Array of batch jobs. Each item supports client_id, depends_on, and request fields matching submit_process_job.",
+						Description: "Array of batch jobs. Each item supports client_id, depends_on, and request fields matching submit_process_job. Default project scope is inherited unless a request already sets project_id.",
 						Items: &PropertySchema{
 							Type: "object",
 							Properties: map[string]PropertySchema{
@@ -272,8 +286,9 @@ func AllTools() []Tool {
 							},
 						},
 					},
-					"output":   {Type: "string", Description: "Output dataset name when registering results (optional)."},
-					"register": {Type: "boolean", Description: "Persist the pipeline result as a dataset."},
+					"output":     {Type: "string", Description: "Output dataset name when registering results (optional)."},
+					"register":   {Type: "boolean", Description: "Persist the pipeline result as a dataset."},
+					"project_id": {Type: "string", Description: "Optional project scope override. Also used when the pipeline registers a dataset."},
 				},
 				Required: []string{"input", "steps"},
 			},
@@ -284,10 +299,11 @@ func AllTools() []Tool {
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
-					"input":    {Type: "string", Description: "Input dataset name."},
-					"format":   {Type: "string", Description: "Target format (e.g. 'geojson', 'shapefile', 'geopackage', 'kml', 'csv', 'flatgeobuf', 'parquet')."},
-					"output":   {Type: "string", Description: "Optional output dataset name when registering results."},
-					"register": {Type: "boolean", Description: "Persist converted output as a dataset."},
+					"input":      {Type: "string", Description: "Input dataset name."},
+					"format":     {Type: "string", Description: "Target format (e.g. 'geojson', 'shapefile', 'geopackage', 'kml', 'csv', 'flatgeobuf', 'parquet')."},
+					"output":     {Type: "string", Description: "Optional output dataset name when registering results."},
+					"register":   {Type: "boolean", Description: "Persist converted output as a dataset."},
+					"project_id": {Type: "string", Description: "Optional project to attach the converted dataset to."},
 				},
 				Required: []string{"input", "format"},
 			},
@@ -502,6 +518,7 @@ func AllTools() []Tool {
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"catalog_id": {Type: "string", Description: "The catalog entry ID to import."},
+					"project_id": {Type: "string", Description: "Optional project to attach the imported dataset to. Also configurable globally via --project-id."},
 				},
 				Required: []string{"catalog_id"},
 			},
@@ -547,9 +564,13 @@ func AllTools() []Tool {
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
-					"asset_url": {Type: "string", Description: "Direct URL of the STAC asset to download (e.g. a GeoJSON or GeoParquet file URL)."},
-					"name":      {Type: "string", Description: "Name for the imported dataset."},
-					"format":    {Type: "string", Description: "Data format hint: 'geojson', 'parquet', 'gpkg', or 'csv'. Auto-detected if omitted."},
+					"asset_url":   {Type: "string", Description: "Direct URL of the STAC asset to download (e.g. a GeoJSON or GeoParquet file URL)."},
+					"name":        {Type: "string", Description: "Name for the imported dataset."},
+					"format":      {Type: "string", Description: "Data format hint: 'geojson', 'parquet', 'gpkg', or 'csv'. Auto-detected if omitted."},
+					"namespace":   {Type: "string", Description: "Optional dataset namespace prefix."},
+					"collection":  {Type: "string", Description: "Optional STAC collection identifier."},
+					"catalog_url": {Type: "string", Description: "Optional source catalog URL for provenance."},
+					"project_id":  {Type: "string", Description: "Optional project to attach the imported dataset to. Also configurable globally via --project-id."},
 				},
 				Required: []string{"asset_url", "name"},
 			},

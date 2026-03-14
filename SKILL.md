@@ -26,10 +26,14 @@ Start with `list_datasets` to see what's available. Use `get_dataset_info` to dr
 
 Use `query_features` with:
 - `bbox`: spatial bounding box filter (`west,south,east,north`)
+- `bbox_crs`: optional CRS for the bbox coordinates
+- `crs`: optional CRS for returned geometries
 - `filter`: CQL2 expression (e.g. `population > 10000 AND status = 'active'`)
 - `limit`: max features (default 10, use higher values carefully)
 - `properties`: comma-separated list of properties to include (reduces response size)
 - `sortby`: property to sort by (prefix with `-` for descending)
+
+Most data-management tools also accept an optional `project_id` argument. Use it when the same user has access to multiple projects or when the agent is started without a global `--project-id`.
 
 ### SQL queries
 
@@ -70,7 +74,7 @@ Roteiro includes a built-in data catalog and supports importing from remote STAC
 
 ### Built-in catalog
 
-Use `browse_catalog` to discover datasets available for import. Filter by `search` (text) or `category`. Use `import_from_catalog` with a `catalog_id` to download and register a dataset.
+Use `browse_catalog` to discover datasets available for import. Filter by `search` (text) or `category`. Use `import_from_catalog` with a `catalog_id` to download and register a dataset. Pass `project_id` when the imported dataset should be attached to a specific workspace project.
 
 ### Remote STAC catalogs
 
@@ -78,7 +82,7 @@ For external data sources:
 1. `browse_stac_catalog` — inspect a remote STAC catalog by URL
 2. `browse_stac_collections` — list available collections
 3. `browse_stac_items` — preview items with optional `bbox` and `datetime` filters
-4. `import_stac_asset` — download an asset URL and register it as a local dataset
+4. `import_stac_asset` — download an asset URL and register it as a local dataset; optionally include `namespace`, `collection`, `catalog_url`, and `project_id`
 
 ### Local STAC search
 
