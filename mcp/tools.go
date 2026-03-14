@@ -617,7 +617,7 @@ func AllTools() []Tool {
 		},
 		{
 			Name:        "map_api",
-			Description: "Access map-focused operations (publishing, raster metadata, OGC feature edits) through a strict allowlist. Mutating operations require confirm=true.",
+			Description: "Access map-focused operations (publishing, raster metadata, slope/aspect, geodesic area/length, raster classification, OGC feature edits) through a strict allowlist. Mutating operations require confirm=true.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -629,6 +629,9 @@ func AllTools() []Tool {
 							"update_map_embed_config", "get_public_map",
 							"get_raster_info", "get_raster_stats", "get_raster_histogram", "get_raster_dimensions", "get_raster_values",
 							"raster_zonal_stats", "export_raster_band", "raster_contour", "raster_viewshed", "raster_profile", "raster_kde",
+							"raster_slope", "raster_aspect",
+							"geodesic_area", "geodesic_length",
+							"classify_kmeans", "classify_isodata", "classify_ml", "classify_rf",
 							"create_feature", "update_feature", "delete_feature",
 						},
 					},
