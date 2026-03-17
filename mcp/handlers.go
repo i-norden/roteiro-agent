@@ -166,6 +166,8 @@ var indoorOperations = map[string]apiOperation{
 	"get_stats":                {Method: "GET", Path: "/api/indoor/buildings/{building_id}/stats"},
 	"validate_building":        {Method: "GET", Path: "/api/indoor/buildings/{building_id}/validate"},
 	"get_accessibility":        {Method: "GET", Path: "/api/indoor/buildings/{building_id}/analysis/accessibility"},
+	"get_dead_zones":           {Method: "GET", Path: "/api/indoor/buildings/{building_id}/analysis/dead-zones"},
+	"get_reachable":            {Method: "GET", Path: "/api/indoor/buildings/{building_id}/analysis/reachable"},
 	"get_historical_analytics": {Method: "GET", Path: "/api/indoor/buildings/{building_id}/analytics"},
 	"ingest_sensor_data":       {Method: "POST", Path: "/api/indoor/buildings/{building_id}/sensors", Mutating: true},
 	"get_sensor_data":          {Method: "GET", Path: "/api/indoor/buildings/{building_id}/sensors"},
@@ -174,6 +176,12 @@ var indoorOperations = map[string]apiOperation{
 	"ingest_positions":         {Method: "POST", Path: "/api/indoor/buildings/{building_id}/positions", Mutating: true},
 	"get_latest_positions":     {Method: "GET", Path: "/api/indoor/buildings/{building_id}/positions/latest"},
 	"get_position_history":     {Method: "GET", Path: "/api/indoor/buildings/{building_id}/positions/{device_id}/history"},
+	"list_scenarios":           {Method: "GET", Path: "/api/indoor/buildings/{building_id}/scenarios"},
+	"create_scenario":          {Method: "POST", Path: "/api/indoor/buildings/{building_id}/scenarios", Mutating: true},
+	"get_scenario":             {Method: "GET", Path: "/api/indoor/buildings/{building_id}/scenarios/{scenario_id}"},
+	"update_scenario":          {Method: "PUT", Path: "/api/indoor/buildings/{building_id}/scenarios/{scenario_id}", Mutating: true},
+	"delete_scenario":          {Method: "DELETE", Path: "/api/indoor/buildings/{building_id}/scenarios/{scenario_id}", Mutating: true},
+	"get_stream_status":        {Method: "GET", Path: "/api/indoor/buildings/{building_id}/stream/status"},
 	"create_booking":           {Method: "POST", Path: "/api/indoor/buildings/{building_id}/bookings", Mutating: true},
 	"list_bookings":            {Method: "GET", Path: "/api/indoor/buildings/{building_id}/bookings"},
 	"cancel_booking":           {Method: "DELETE", Path: "/api/indoor/buildings/{building_id}/bookings/{booking_id}", Mutating: true},
@@ -1013,6 +1021,13 @@ func handleScopedAPI(client *Client, params map[string]interface{}, ops map[stri
 	if op.Mutating && !requireConfirm(params) {
 		return "", fmt.Errorf("%s operation %q mutates data; pass confirm=true to proceed", scope, opName)
 	}
+	if scope == "indoor" && (opName == "import_building" || opName == "upload_floor_plan") {
+		data, err := handleIndoorMultipartOperation(client, opName, op.Path, params)
+		if err != nil {
+			return "", err
+		}
+		return formatJSON(data), nil
+	}
 
 	path, err := interpolatePath(op.Path, params)
 	if err != nil {
@@ -1034,6 +1049,26 @@ func handleScopedAPI(client *Client, params map[string]interface{}, ops map[stri
 	return formatJSON(data), nil
 }
 
+func handleIndoorMultipartOperation(client *Client, opName, pathTemplate string, params map[string]interface{}) (json.RawMessage, error) {
+	path, err := interpolatePath(pathTemplate, params)
+	if err != nil {
+		return nil, err
+	}
+	filePath, err := requireString(params, "file_path")
+	if err != nil {
+		return nil, err
+	}
+	extraFields := map[string]string{}
+	if opName == "upload_floor_plan" {
+		if bounds, err := optionalMultipartValue(params, "bounds"); err != nil {
+			return nil, err
+		} else if bounds != "" {
+			extraFields["bounds"] = bounds
+		}
+	}
+	return client.UploadMultipart(path, filePath, "file", extraFields)
+}
+
 func requireConfirm(params map[string]interface{}) bool {
 	v, ok := params["confirm"]
 	if !ok {
@@ -1053,6 +1088,33 @@ func extractBody(params map[string]interface{}) interface{} {
 		}
 	}
 	return nil
+}
+
+func optionalMultipartValue(params map[string]interface{}, key string) (string, error) {
+	if raw, ok := params[key]; ok && raw != nil {
+		return stringifyMultipartValue(raw)
+	}
+	if body, ok := params["body"].(map[string]interface{}); ok {
+		if raw, ok := body[key]; ok && raw != nil {
+			return stringifyMultipartValue(raw)
+		}
+	}
+	return "", nil
+}
+
+func stringifyMultipartValue(v interface{}) (string, error) {
+	switch value := v.(type) {
+	case string:
+		return value, nil
+	case map[string]interface{}, []interface{}:
+		data, err := json.Marshal(value)
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
+	default:
+		return stringify(v)
+	}
 }
 
 func extractQuery(params map[string]interface{}) (map[string]string, error) {

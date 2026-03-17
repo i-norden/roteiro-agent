@@ -200,8 +200,8 @@ func (c *Client) GetFeature(collectionID, featureID string) (json.RawMessage, er
 	return json.RawMessage(body), nil
 }
 
-// UploadFile calls POST /upload with a multipart file upload.
-func (c *Client) UploadFile(filePath, name, projectID string) (json.RawMessage, error) {
+// UploadMultipart calls POST {path} with a multipart file upload.
+func (c *Client) UploadMultipart(path, filePath, fieldName string, extraFields map[string]string) (json.RawMessage, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
@@ -210,26 +210,26 @@ func (c *Client) UploadFile(filePath, name, projectID string) (json.RawMessage, 
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	part, err := w.CreateFormFile("file", filepath.Base(filePath))
+	part, err := w.CreateFormFile(fieldName, filepath.Base(filePath))
 	if err != nil {
 		return nil, err
 	}
 	if _, err := io.Copy(part, f); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(name) != "" {
-		if err := w.WriteField("name", name); err != nil {
+	for key, value := range extraFields {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		if err := w.WriteField(key, value); err != nil {
 			return nil, err
 		}
 	}
-	if strings.TrimSpace(projectID) != "" {
-		if err := w.WriteField("project_id", projectID); err != nil {
-			return nil, err
-		}
+	if err := w.Close(); err != nil {
+		return nil, err
 	}
-	w.Close()
 
-	req, err := http.NewRequest("POST", c.BaseURL+"/upload", &buf)
+	req, err := http.NewRequest("POST", c.BaseURL+path, &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -239,9 +239,21 @@ func (c *Client) UploadFile(filePath, name, projectID string) (json.RawMessage, 
 		return nil, err
 	}
 	if code != http.StatusOK && code != http.StatusCreated {
-		return nil, fmt.Errorf("POST /upload returned %d: %s", code, truncate(body, 500))
+		return nil, fmt.Errorf("POST %s returned %d: %s", path, code, truncate(body, 500))
 	}
 	return json.RawMessage(body), nil
+}
+
+// UploadFile calls POST /upload with a multipart file upload.
+func (c *Client) UploadFile(filePath, name, projectID string) (json.RawMessage, error) {
+	extraFields := map[string]string{}
+	if strings.TrimSpace(name) != "" {
+		extraFields["name"] = name
+	}
+	if strings.TrimSpace(projectID) != "" {
+		extraFields["project_id"] = projectID
+	}
+	return c.UploadMultipart("/upload", filePath, "file", extraFields)
 }
 
 // RunProcess calls POST /api/process.
