@@ -128,7 +128,6 @@ Add to `.mcp.json`:
 | `browse_stac_items` | List items in a remote STAC collection |
 | `import_stac_asset` | Import a STAC asset as a local dataset, optionally with namespace/catalog metadata and project attachment |
 | `search_stac` | Search local STAC with bbox/datetime/CQL2 filters |
-| `indoor_api` | Allowlisted Indoor GIS endpoint access (buildings/floors/spaces/navigation/analytics/sensors/booking/geofences/simulations). Mutations require `confirm=true`. |
 | `map_api` | Allowlisted map endpoint access (publish/unpublish/stats/embed config, raster metadata/JSON analysis/export ops including contour/viewshed/profile/KDE/slope/aspect, geodesic area/length, raster classification via k-means/ISODATA/max-likelihood/random-forest, OGC feature edit ops). Mutations require `confirm=true`. |
 
 Use `list_operations` for the live vector-processing catalog. Raster operations do not currently have a live catalog endpoint, so `run_raster_process` documents the current backend families directly: terrain, hydrology, distance/cost, spectral/change, classification, and raster-vector conversion. For dataset-name-based raster JSON routes, `map_api` now also exposes contour, viewshed, profile, KDE, slope, and aspect. Geodesic area/length and raster classification (k-means, ISODATA, maximum-likelihood, random-forest) are also available via `map_api`.
