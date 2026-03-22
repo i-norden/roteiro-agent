@@ -98,7 +98,9 @@ func TestToolsList(t *testing.T) {
 		"list_datasets", "get_dataset_info", "query_features", "get_feature",
 		"upload_dataset", "run_process", "run_raster_process", "preflight_process", "submit_process_job",
 		"submit_process_batch", "list_process_jobs", "get_process_job",
-		"cancel_process_job", "rerun_process_job", "run_pipeline", "convert_format",
+		"cancel_process_job", "rerun_process_job", "list_pipeline_templates", "list_pipelines",
+		"get_pipeline", "create_pipeline", "update_pipeline", "delete_pipeline",
+		"duplicate_pipeline", "execute_saved_pipeline", "run_pipeline", "convert_format",
 		"diff_datasets", "execute_sql", "list_spatial_tables", "get_duckdb_info",
 		"list_duckdb_datasets", "geocode", "reverse_geocode", "compute_route",
 		"compute_isochrone", "compute_route_matrix", "compute_service_area",
@@ -998,6 +1000,84 @@ func TestToolsCall_SubmitProcessJob(t *testing.T) {
 	text, _ := first["text"].(string)
 	if !strings.Contains(text, "job_123") {
 		t.Errorf("response should contain job id, got: %s", text)
+	}
+}
+
+func TestToolsCall_CreatePipeline(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/pipelines", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body["name"] != "Suitability model" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing name"}`)
+			return
+		}
+		if _, ok := body["graph"]; !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":"missing graph"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id":"pipe_123","name":"Suitability model","version":1}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 241, map[string]interface{}{
+		"name": "create_pipeline",
+		"arguments": map[string]interface{}{
+			"name":        "Suitability model",
+			"description": "Buffer and clip",
+			"graph": map[string]interface{}{
+				"nodes": []interface{}{map[string]interface{}{"id": "n1"}},
+				"edges": []interface{}{},
+			},
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, "pipe_123") {
+		t.Errorf("response should contain pipeline id, got: %s", text)
+	}
+}
+
+func TestToolsCall_ExecuteSavedPipeline(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/pipelines/{id}/execute", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("id") != "pipe_123" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"pipeline_id":"pipe_123","status":"submitted","node_count":1,"edge_count":0}`)
+	})
+	srv := testServer(t, mux)
+
+	resp := sendRequest(t, srv, "tools/call", 242, map[string]interface{}{
+		"name": "execute_saved_pipeline",
+		"arguments": map[string]interface{}{
+			"pipeline_id": "pipe_123",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %v", resp.Error)
+	}
+	result, _ := resp.Result.(map[string]interface{})
+	content, _ := result["content"].([]interface{})
+	first, _ := content[0].(map[string]interface{})
+	text, _ := first["text"].(string)
+	if !strings.Contains(text, `"status": "submitted"`) {
+		t.Errorf("response should contain submitted status, got: %s", text)
 	}
 }
 

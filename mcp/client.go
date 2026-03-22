@@ -382,6 +382,102 @@ func (c *Client) RunPipeline(payload interface{}) (json.RawMessage, error) {
 	return json.RawMessage(body), nil
 }
 
+// ListPipelineTemplates calls GET /api/pipelines/templates.
+func (c *Client) ListPipelineTemplates() (json.RawMessage, error) {
+	body, code, err := c.get("/api/pipelines/templates", nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("GET /api/pipelines/templates returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// ListPipelines calls GET /api/pipelines.
+func (c *Client) ListPipelines() (json.RawMessage, error) {
+	body, code, err := c.get("/api/pipelines", nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("GET /api/pipelines returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// GetPipeline calls GET /api/pipelines/{id}.
+func (c *Client) GetPipeline(id string) (json.RawMessage, error) {
+	body, code, err := c.get("/api/pipelines/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("GET /api/pipelines/%s returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// CreatePipeline calls POST /api/pipelines.
+func (c *Client) CreatePipeline(payload interface{}) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/pipelines", payload)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusCreated {
+		return nil, fmt.Errorf("POST /api/pipelines returned %d: %s", code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// UpdatePipeline calls PUT /api/pipelines/{id}.
+func (c *Client) UpdatePipeline(id string, payload interface{}) (json.RawMessage, error) {
+	body, code, err := c.callJSON("PUT", "/api/pipelines/"+url.PathEscape(id), payload, nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("PUT /api/pipelines/%s returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// DeletePipeline calls DELETE /api/pipelines/{id}.
+func (c *Client) DeletePipeline(id string) (json.RawMessage, error) {
+	body, code, err := c.callJSON("DELETE", "/api/pipelines/"+url.PathEscape(id), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusNoContent {
+		return nil, fmt.Errorf("DELETE /api/pipelines/%s returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(`{"status":"deleted"}`), nil
+}
+
+// DuplicatePipeline calls POST /api/pipelines/{id}/duplicate.
+func (c *Client) DuplicatePipeline(id string) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/pipelines/"+url.PathEscape(id)+"/duplicate", map[string]interface{}{})
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusCreated {
+		return nil, fmt.Errorf("POST /api/pipelines/%s/duplicate returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
+// ExecutePipeline calls POST /api/pipelines/{id}/execute.
+func (c *Client) ExecutePipeline(id string) (json.RawMessage, error) {
+	body, code, err := c.postJSON("/api/pipelines/"+url.PathEscape(id)+"/execute", map[string]interface{}{})
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("POST /api/pipelines/%s/execute returned %d: %s", id, code, truncate(body, 500))
+	}
+	return json.RawMessage(body), nil
+}
+
 // ConvertFormat calls POST /api/convert.
 func (c *Client) ConvertFormat(payload interface{}) (json.RawMessage, error) {
 	body, code, err := c.postJSON("/api/convert", payload)

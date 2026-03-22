@@ -267,6 +267,90 @@ func AllTools() []Tool {
 			},
 		},
 		{
+			Name:        "list_pipeline_templates",
+			Description: "List persisted pipeline templates from Cairn's visual pipeline builder.",
+			InputSchema: InputSchema{Type: "object"},
+		},
+		{
+			Name:        "list_pipelines",
+			Description: "List persisted pipelines for the current tenant.",
+			InputSchema: InputSchema{Type: "object"},
+		},
+		{
+			Name:        "get_pipeline",
+			Description: "Fetch a persisted pipeline definition by ID.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"pipeline_id": {Type: "string", Description: "The persisted pipeline ID."},
+				},
+				Required: []string{"pipeline_id"},
+			},
+		},
+		{
+			Name:        "create_pipeline",
+			Description: "Create a persisted pipeline definition for the visual pipeline builder.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"name":        {Type: "string", Description: "Pipeline name."},
+					"description": {Type: "string", Description: "Optional pipeline description."},
+					"graph":       {Type: "object", Description: "Pipeline graph JSON payload."},
+					"canvas":      {Type: "object", Description: "Pipeline canvas layout JSON payload."},
+				},
+				Required: []string{"name"},
+			},
+		},
+		{
+			Name:        "update_pipeline",
+			Description: "Update a persisted pipeline definition. Requires the current version for optimistic concurrency.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"pipeline_id": {Type: "string", Description: "The persisted pipeline ID."},
+					"name":        {Type: "string", Description: "Pipeline name."},
+					"description": {Type: "string", Description: "Optional pipeline description."},
+					"graph":       {Type: "object", Description: "Pipeline graph JSON payload."},
+					"canvas":      {Type: "object", Description: "Pipeline canvas layout JSON payload."},
+					"version":     {Type: "number", Description: "Current pipeline version from the latest read."},
+				},
+				Required: []string{"pipeline_id", "name", "version"},
+			},
+		},
+		{
+			Name:        "delete_pipeline",
+			Description: "Delete a persisted pipeline definition by ID.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"pipeline_id": {Type: "string", Description: "The persisted pipeline ID."},
+				},
+				Required: []string{"pipeline_id"},
+			},
+		},
+		{
+			Name:        "duplicate_pipeline",
+			Description: "Duplicate a persisted pipeline definition by ID.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"pipeline_id": {Type: "string", Description: "The persisted pipeline ID."},
+				},
+				Required: []string{"pipeline_id"},
+			},
+		},
+		{
+			Name:        "execute_saved_pipeline",
+			Description: "Submit a persisted pipeline definition for execution.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"pipeline_id": {Type: "string", Description: "The persisted pipeline ID."},
+				},
+				Required: []string{"pipeline_id"},
+			},
+		},
+		{
 			Name:        "run_pipeline",
 			Description: "Run a multi-step geoprocessing pipeline. Each step's output feeds into the next step. Useful for chaining operations like buffer → clip → simplify.",
 			InputSchema: InputSchema{

@@ -60,6 +60,22 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		return handleCancelProcessJob(client, params)
 	case "rerun_process_job":
 		return handleRerunProcessJob(client, params)
+	case "list_pipeline_templates":
+		return handleListPipelineTemplates(client)
+	case "list_pipelines":
+		return handleListPipelines(client)
+	case "get_pipeline":
+		return handleGetPipeline(client, params)
+	case "create_pipeline":
+		return handleCreatePipeline(client, params)
+	case "update_pipeline":
+		return handleUpdatePipeline(client, params)
+	case "delete_pipeline":
+		return handleDeletePipeline(client, params)
+	case "duplicate_pipeline":
+		return handleDuplicatePipeline(client, params)
+	case "execute_saved_pipeline":
+		return handleExecuteSavedPipeline(client, params)
 	case "run_pipeline":
 		return handleRunPipeline(client, params)
 	case "convert_format":
@@ -368,6 +384,127 @@ func handleRerunProcessJob(client *Client, params map[string]interface{}) (strin
 	return formatJSON(data), nil
 }
 
+func handleListPipelineTemplates(client *Client) (string, error) {
+	data, err := client.ListPipelineTemplates()
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleListPipelines(client *Client) (string, error) {
+	data, err := client.ListPipelines()
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleGetPipeline(client *Client, params map[string]interface{}) (string, error) {
+	pipelineID, err := requireString(params, "pipeline_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.GetPipeline(pipelineID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleCreatePipeline(client *Client, params map[string]interface{}) (string, error) {
+	name, err := requireString(params, "name")
+	if err != nil {
+		return "", err
+	}
+	payload := map[string]interface{}{
+		"name": name,
+	}
+	if desc, err := optionalStringLike(params, "description"); err == nil && desc != "" {
+		payload["description"] = desc
+	}
+	if graph, ok := params["graph"]; ok {
+		payload["graph"] = graph
+	}
+	if canvas, ok := params["canvas"]; ok {
+		payload["canvas"] = canvas
+	}
+	data, err := client.CreatePipeline(payload)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleUpdatePipeline(client *Client, params map[string]interface{}) (string, error) {
+	pipelineID, err := requireString(params, "pipeline_id")
+	if err != nil {
+		return "", err
+	}
+	name, err := requireString(params, "name")
+	if err != nil {
+		return "", err
+	}
+	version, err := requireIntLike(params, "version")
+	if err != nil {
+		return "", err
+	}
+	payload := map[string]interface{}{
+		"name":    name,
+		"version": version,
+	}
+	if desc, err := optionalStringLike(params, "description"); err == nil && desc != "" {
+		payload["description"] = desc
+	}
+	if graph, ok := params["graph"]; ok {
+		payload["graph"] = graph
+	}
+	if canvas, ok := params["canvas"]; ok {
+		payload["canvas"] = canvas
+	}
+	data, err := client.UpdatePipeline(pipelineID, payload)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleDeletePipeline(client *Client, params map[string]interface{}) (string, error) {
+	pipelineID, err := requireString(params, "pipeline_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.DeletePipeline(pipelineID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleDuplicatePipeline(client *Client, params map[string]interface{}) (string, error) {
+	pipelineID, err := requireString(params, "pipeline_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.DuplicatePipeline(pipelineID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleExecuteSavedPipeline(client *Client, params map[string]interface{}) (string, error) {
+	pipelineID, err := requireString(params, "pipeline_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.ExecutePipeline(pipelineID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
 func handleRunPipeline(client *Client, params map[string]interface{}) (string, error) {
 	if _, ok := params["output_name"]; !ok {
 		if out, ok := params["output"].(string); ok && out != "" {
@@ -650,6 +787,18 @@ func requireStringLike(params map[string]interface{}, key string) (string, error
 		return "", fmt.Errorf("parameter %s must not be empty", key)
 	}
 	return s, nil
+}
+
+func requireIntLike(params map[string]interface{}, key string) (int, error) {
+	s, err := requireStringLike(params, key)
+	if err != nil {
+		return 0, err
+	}
+	value, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("parameter %s must be an integer", key)
+	}
+	return value, nil
 }
 
 func parseRoutePoint(v interface{}) ([2]float64, error) {
