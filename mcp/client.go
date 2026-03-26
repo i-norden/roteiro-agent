@@ -508,30 +508,17 @@ func (c *Client) ExecuteSQL(query string) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	if code == http.StatusNotFound || code == http.StatusMethodNotAllowed {
-		// Backward compatibility for older Roteiro deployments.
-		body, code, err = c.postJSON("/api/sql/query", map[string]string{"sql": query})
-		if err != nil {
-			return nil, err
-		}
-	}
 	if code != http.StatusOK {
 		return nil, fmt.Errorf("POST SQL query endpoint returned %d: %s", code, truncate(body, 500))
 	}
 	return json.RawMessage(body), nil
 }
 
-// ListSpatialTables calls GET /api/query/sql/datasets (or fallback /api/sql/tables).
+// ListSpatialTables calls GET /api/query/sql/datasets.
 func (c *Client) ListSpatialTables() (json.RawMessage, error) {
 	body, code, err := c.get("/api/query/sql/datasets", nil)
 	if err != nil {
 		return nil, err
-	}
-	if code == http.StatusNotFound || code == http.StatusMethodNotAllowed {
-		body, code, err = c.get("/api/sql/tables", nil)
-		if err != nil {
-			return nil, err
-		}
 	}
 	if code != http.StatusOK {
 		return nil, fmt.Errorf("GET SQL tables endpoint returned %d: %s", code, truncate(body, 500))
