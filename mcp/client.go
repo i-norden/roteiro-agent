@@ -521,14 +521,14 @@ func (c *Client) ExecuteSQL(query string) (json.RawMessage, error) {
 	return json.RawMessage(body), nil
 }
 
-// ListSpatialTables calls GET /api/sql/tables (or fallback /api/query/sql/datasets).
+// ListSpatialTables calls GET /api/query/sql/datasets (or fallback /api/sql/tables).
 func (c *Client) ListSpatialTables() (json.RawMessage, error) {
-	body, code, err := c.get("/api/sql/tables", nil)
+	body, code, err := c.get("/api/query/sql/datasets", nil)
 	if err != nil {
 		return nil, err
 	}
 	if code == http.StatusNotFound || code == http.StatusMethodNotAllowed {
-		body, code, err = c.get("/api/query/sql/datasets", nil)
+		body, code, err = c.get("/api/sql/tables", nil)
 		if err != nil {
 			return nil, err
 		}
