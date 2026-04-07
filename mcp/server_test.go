@@ -12,7 +12,6 @@ import (
 	"testing"
 )
 
-// testServer creates a test Roteiro API server and returns a connected MCP server.
 func testServer(t *testing.T, handler http.Handler) *Server {
 	t.Helper()
 	ts := httptest.NewServer(handler)
@@ -68,7 +67,7 @@ func TestInitialize(t *testing.T) {
 	}
 }
 
-func TestToolsList(t *testing.T) {
+func TestToolsListCurrentSurface(t *testing.T) {
 	srv := testServer(t, http.NotFoundHandler())
 	resp := sendRequest(t, srv, "tools/list", 2, nil)
 
@@ -84,101 +83,64 @@ func TestToolsList(t *testing.T) {
 		t.Fatal("tools is not an array")
 	}
 	if len(tools) == 0 {
-		t.Error("tools list should not be empty")
+		t.Fatal("tools list should not be empty")
 	}
 
-	// Verify expected tools are present.
-	toolNames := make(map[string]bool)
-	for _, t := range tools {
-		m, _ := t.(map[string]interface{})
+	toolNames := make(map[string]bool, len(tools))
+	for _, item := range tools {
+		m, _ := item.(map[string]interface{})
 		name, _ := m["name"].(string)
 		toolNames[name] = true
 	}
+
 	for _, want := range []string{
-		"list_datasets", "get_dataset_info", "query_features", "get_feature",
-		"upload_dataset", "run_process", "run_raster_process", "preflight_process", "submit_process_job",
-		"submit_process_batch", "list_process_jobs", "get_process_job",
-		"cancel_process_job", "rerun_process_job", "list_pipeline_templates", "list_pipelines",
-		"get_pipeline", "create_pipeline", "update_pipeline", "delete_pipeline",
-		"duplicate_pipeline", "execute_saved_pipeline", "run_pipeline", "convert_format",
-		"diff_datasets", "execute_sql", "list_spatial_tables", "get_duckdb_info",
-		"list_duckdb_datasets", "geocode", "reverse_geocode", "compute_route",
-		"compute_isochrone", "compute_route_matrix", "compute_service_area",
-		"list_operations", "list_analysis_operations", "browse_catalog", "browse_catalog_enhanced",
-		"get_catalog_entry", "list_catalog_categories", "list_catalog_tags", "import_from_catalog", "browse_stac_catalog",
-		"browse_stac_collections", "browse_stac_items", "import_stac_asset",
-		"search_stac",
+		"list_datasets",
+		"import_source",
+		"get_scene_manifest",
+		"list_bodies",
+		"execute_body_recipe",
+		"list_operations",
+		"submit_operation_job",
+		"run_pipeline",
+		"list_query_engines",
+		"execute_sql",
+		"save_sql_result",
+		"list_projects",
+		"set_project_workspace",
+		"publish_map",
+		"update_map_embed_config",
 	} {
 		if !toolNames[want] {
 			t.Errorf("missing tool: %s", want)
 		}
 	}
-}
 
-func TestToolsCall_ListAnalysisOperations(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/analysis/operations", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"operations":[{"id":"topology","name":"Topology Analysis"}]}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 22, map[string]interface{}{
-		"name":      "list_analysis_operations",
-		"arguments": map[string]interface{}{},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "Topology Analysis") {
-		t.Errorf("response should contain operation name, got: %s", text)
-	}
-}
-
-func TestToolsCall_ListDatasets(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /datasets", func(w http.ResponseWriter, r *http.Request) {
-		// Verify API key is passed.
-		if r.Header.Get("X-API-Key") != "test-key" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
+	for _, removed := range []string{
+		"run_process",
+		"run_raster_process",
+		"convert_format",
+		"diff_datasets",
+		"browse_catalog",
+		"search_stac",
+		"map_api",
+	} {
+		if toolNames[removed] {
+			t.Errorf("legacy tool should have been removed: %s", removed)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `[{"name":"parks","format":"GeoJSON","feature_count":42}]`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 3, map[string]interface{}{
-		"name":      "list_datasets",
-		"arguments": map[string]interface{}{},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	if len(content) == 0 {
-		t.Fatal("expected content")
-	}
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "parks") {
-		t.Errorf("response should contain 'parks', got: %s", text)
 	}
 }
 
-func TestToolsCall_QueryFeatures(t *testing.T) {
+func TestToolsCallQueryFeaturesAcceptsNumericPagination(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /collections/{id}/items", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		if id != "buildings" {
-			w.WriteHeader(http.StatusNotFound)
+		if got := r.URL.Query().Get("limit"); got != "5" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"limit=%s"}`, got)
+			return
+		}
+		if got := r.URL.Query().Get("offset"); got != "2" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"offset=%s"}`, got)
 			return
 		}
 		if got := r.Header.Get("X-Project-ID"); got != "42" {
@@ -186,49 +148,31 @@ func TestToolsCall_QueryFeatures(t *testing.T) {
 			fmt.Fprintf(w, `{"error":"project=%s"}`, got)
 			return
 		}
-		if got := r.URL.Query().Get("bbox-crs"); got != "EPSG:4326" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `{"error":"bbox-crs=%s"}`, got)
-			return
-		}
-		if got := r.URL.Query().Get("crs"); got != "EPSG:3857" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `{"error":"crs=%s"}`, got)
-			return
-		}
-		limit := r.URL.Query().Get("limit")
-		if limit == "" {
-			limit = "10"
-		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"type":"FeatureCollection","features":[],"numberMatched":0,"limit":%s}`, limit)
+		fmt.Fprint(w, `{"type":"FeatureCollection","features":[]}`)
 	})
 	srv := testServer(t, mux)
 
-	resp := sendRequest(t, srv, "tools/call", 4, map[string]interface{}{
+	resp := sendRequest(t, srv, "tools/call", 101, map[string]interface{}{
 		"name": "query_features",
 		"arguments": map[string]interface{}{
 			"collection_id": "buildings",
-			"bbox_crs":      "EPSG:4326",
-			"crs":           "EPSG:3857",
+			"limit":         5.0,
+			"offset":        2.0,
 			"project_id":    42.0,
-			"limit":         "5",
 		},
 	})
 
 	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
+		t.Fatalf("unexpected JSON-RPC error: %v", resp.Error)
 	}
 	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "FeatureCollection") {
-		t.Errorf("response should contain 'FeatureCollection', got: %s", text)
+	if isErr, _ := result["isError"].(bool); isErr {
+		t.Fatalf("expected success result, got error: %+v", result)
 	}
 }
 
-func TestToolsCall_UploadDatasetScoped(t *testing.T) {
+func TestToolsCallUploadDatasetIncludesBodyID(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "roads.geojson")
 	if err := os.WriteFile(filePath, []byte(`{"type":"FeatureCollection","features":[]}`), 0o600); err != nil {
@@ -247,27 +191,23 @@ func TestToolsCall_UploadDatasetScoped(t *testing.T) {
 			fmt.Fprintf(w, `{"error":"parse=%v"}`, err)
 			return
 		}
-		if got := r.FormValue("name"); got != "roads" {
+		if got := r.FormValue("body_id"); got != "mars" {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `{"error":"name=%s"}`, got)
-			return
-		}
-		if got := r.FormValue("project_id"); got != "42" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `{"error":"project_id=%s"}`, got)
+			fmt.Fprintf(w, `{"error":"body_id=%s"}`, got)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		fmt.Fprint(w, `{"name":"roads","path":"/tmp/roads.geojson","format":"geojson"}`)
+		fmt.Fprint(w, `{"name":"roads","body_id":"mars"}`)
 	})
 	srv := testServer(t, mux)
 
-	resp := sendRequest(t, srv, "tools/call", 240, map[string]interface{}{
+	resp := sendRequest(t, srv, "tools/call", 102, map[string]interface{}{
 		"name": "upload_dataset",
 		"arguments": map[string]interface{}{
 			"file_path":  filePath,
 			"name":       "roads",
+			"body_id":    "mars",
 			"project_id": 42.0,
 		},
 	})
@@ -279,27 +219,33 @@ func TestToolsCall_UploadDatasetScoped(t *testing.T) {
 	content, _ := result["content"].([]interface{})
 	first, _ := content[0].(map[string]interface{})
 	text, _ := first["text"].(string)
-	if !strings.Contains(text, "roads") {
-		t.Errorf("response should contain dataset name, got: %s", text)
+	if !strings.Contains(text, "mars") {
+		t.Fatalf("response should contain body_id, got: %s", text)
 	}
 }
 
-func TestToolsCall_ExecuteSQL(t *testing.T) {
+func TestToolsCallExecuteSQLUsesEngineAwareRoute(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/query/sql", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/query/sql", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("engine"); got != "duckdb" {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":"engine=%s"}`, got)
+			return
+		}
 		var body struct {
 			SQL string `json:"sql"`
 		}
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"columns":["count"],"rows":[[42]],"sql":"%s"}`, body.SQL)
+		fmt.Fprintf(w, `{"columns":["count"],"rows":[[42]],"sql":%q}`, body.SQL)
 	})
 	srv := testServer(t, mux)
 
-	resp := sendRequest(t, srv, "tools/call", 5, map[string]interface{}{
+	resp := sendRequest(t, srv, "tools/call", 103, map[string]interface{}{
 		"name": "execute_sql",
 		"arguments": map[string]interface{}{
-			"query": "SELECT count(*) FROM parks",
+			"engine": "duckdb",
+			"query":  "SELECT count(*) FROM parks",
 		},
 	})
 
@@ -309,197 +255,26 @@ func TestToolsCall_ExecuteSQL(t *testing.T) {
 	result, _ := resp.Result.(map[string]interface{})
 	isErr, _ := result["isError"].(bool)
 	if isErr {
-		t.Error("should not be an error")
+		t.Fatalf("expected success result, got error: %+v", result)
 	}
 	content, _ := result["content"].([]interface{})
 	first, _ := content[0].(map[string]interface{})
 	text, _ := first["text"].(string)
-	if !strings.Contains(text, "42") {
-		t.Errorf("response should contain '42', got: %s", text)
+	if !strings.Contains(text, "SELECT count(*) FROM parks") {
+		t.Fatalf("response should contain SQL text, got: %s", text)
 	}
 }
 
-func TestToolsCall_ConvertFormat_MapsFormatToOutputFormat(t *testing.T) {
+func TestToolsCallListBodies(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/convert", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["output_format"] != "parquet" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing output_format"}`)
-			return
-		}
+	mux.HandleFunc("GET /api/v1/bodies", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		fmt.Fprint(w, `{"message":"conversion complete"}`)
+		fmt.Fprint(w, `[{"slug":"earth"},{"slug":"mars"}]`)
 	})
 	srv := testServer(t, mux)
 
-	resp := sendRequest(t, srv, "tools/call", 13, map[string]interface{}{
-		"name": "convert_format",
-		"arguments": map[string]interface{}{
-			"input":  "parks",
-			"format": "parquet",
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	isErr, _ := result["isError"].(bool)
-	if isErr {
-		t.Fatalf("expected success result, got error: %+v", result)
-	}
-}
-
-func TestToolsCall_DiffDatasets_MapsBaseCompare(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/diff", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["left"] != "v1" || body["right"] != "v2" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing left/right"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"added":1,"removed":0,"modified":2}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 14, map[string]interface{}{
-		"name": "diff_datasets",
-		"arguments": map[string]interface{}{
-			"base":    "v1",
-			"compare": "v2",
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	isErr, _ := result["isError"].(bool)
-	if isErr {
-		t.Fatalf("expected success result, got error: %+v", result)
-	}
-}
-
-func TestToolsCall_ComputeRoute_MapsOriginDestination(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/route", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Waypoints [][2]float64 `json:"waypoints"`
-		}
-		json.NewDecoder(r.Body).Decode(&body)
-		if len(body.Waypoints) != 2 {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"expected 2 waypoints"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"distance":1000,"duration":120}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 15, map[string]interface{}{
-		"name": "compute_route",
-		"arguments": map[string]interface{}{
-			"origin":      map[string]interface{}{"lat": 39.0, "lon": -86.0},
-			"destination": map[string]interface{}{"lat": 39.1, "lon": -86.1},
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	isErr, _ := result["isError"].(bool)
-	if isErr {
-		t.Fatalf("expected success result, got error: %+v", result)
-	}
-}
-
-func TestToolsCall_ComputeRouteMatrix_MapsPoints(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/route/matrix", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Origins      [][2]float64 `json:"origins"`
-			Destinations [][2]float64 `json:"destinations"`
-		}
-		json.NewDecoder(r.Body).Decode(&body)
-		if len(body.Origins) != 1 || len(body.Destinations) != 1 {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"expected origins/destinations"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"durations":[[120]],"distances":[[1000]]}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 16, map[string]interface{}{
-		"name": "compute_route_matrix",
-		"arguments": map[string]interface{}{
-			"origins":      []interface{}{map[string]interface{}{"lat": 39.0, "lon": -86.0}},
-			"destinations": []interface{}{map[string]interface{}{"lat": 39.1, "lon": -86.1}},
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	isErr, _ := result["isError"].(bool)
-	if isErr {
-		t.Fatalf("expected success result, got error: %+v", result)
-	}
-}
-
-func TestToolsCall_ComputeIsochrone_MapsOrigin(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/route/isochrone", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["lng"] == nil || body["lat"] == nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing lng/lat"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"type":"FeatureCollection","features":[]}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 17, map[string]interface{}{
-		"name": "compute_isochrone",
-		"arguments": map[string]interface{}{
-			"origin":  map[string]interface{}{"lat": 39.0, "lon": -86.0},
-			"minutes": []interface{}{10.0, 20.0},
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	isErr, _ := result["isError"].(bool)
-	if isErr {
-		t.Fatalf("expected success result, got error: %+v", result)
-	}
-}
-
-func TestToolsCall_GetDuckDBInfo(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/query/sql/info", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"available"}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 18, map[string]interface{}{
-		"name":      "get_duckdb_info",
+	resp := sendRequest(t, srv, "tools/call", 104, map[string]interface{}{
+		"name":      "list_bodies",
 		"arguments": map[string]interface{}{},
 	})
 
@@ -510,48 +285,15 @@ func TestToolsCall_GetDuckDBInfo(t *testing.T) {
 	content, _ := result["content"].([]interface{})
 	first, _ := content[0].(map[string]interface{})
 	text, _ := first["text"].(string)
-	if !strings.Contains(text, "available") {
-		t.Errorf("response should contain duckdb status, got: %s", text)
+	if !strings.Contains(text, "mars") {
+		t.Fatalf("response should contain mars, got: %s", text)
 	}
 }
 
-func TestToolsCall_BrowseEnhancedCatalog(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/catalog/enhanced", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("live_only") != "true" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing live_only"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `[{"id":"us-census","name":"US Census"}]`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 19, map[string]interface{}{
-		"name": "browse_catalog_enhanced",
-		"arguments": map[string]interface{}{
-			"search":    "census",
-			"live_only": true,
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "us-census") {
-		t.Errorf("response should contain 'us-census', got: %s", text)
-	}
-}
-
-func TestToolsCall_UnknownTool(t *testing.T) {
+func TestToolsCallUnknownTool(t *testing.T) {
 	srv := testServer(t, http.NotFoundHandler())
 
-	resp := sendRequest(t, srv, "tools/call", 6, map[string]interface{}{
+	resp := sendRequest(t, srv, "tools/call", 105, map[string]interface{}{
 		"name":      "nonexistent_tool",
 		"arguments": map[string]interface{}{},
 	})
@@ -562,14 +304,13 @@ func TestToolsCall_UnknownTool(t *testing.T) {
 	result, _ := resp.Result.(map[string]interface{})
 	isErr, _ := result["isError"].(bool)
 	if !isErr {
-		t.Error("should be an error result")
+		t.Fatal("should be an error result")
 	}
 }
 
 func TestPing(t *testing.T) {
 	srv := testServer(t, http.NotFoundHandler())
-	resp := sendRequest(t, srv, "ping", 7, nil)
-
+	resp := sendRequest(t, srv, "ping", 106, nil)
 	if resp.Error != nil {
 		t.Fatalf("unexpected error: %v", resp.Error)
 	}
@@ -577,20 +318,19 @@ func TestPing(t *testing.T) {
 
 func TestUnknownMethod(t *testing.T) {
 	srv := testServer(t, http.NotFoundHandler())
-	resp := sendRequest(t, srv, "nonexistent/method", 8, nil)
-
+	resp := sendRequest(t, srv, "nonexistent/method", 107, nil)
 	if resp.Error == nil {
 		t.Fatal("expected an error for unknown method")
 	}
 	if resp.Error.Code != -32601 {
-		t.Errorf("error code = %d, want -32601", resp.Error.Code)
+		t.Fatalf("error code = %d, want -32601", resp.Error.Code)
 	}
 }
 
-func TestToolsCall_MissingRequiredParam(t *testing.T) {
+func TestToolsCallMissingRequiredParam(t *testing.T) {
 	srv := testServer(t, http.NotFoundHandler())
 
-	resp := sendRequest(t, srv, "tools/call", 9, map[string]interface{}{
+	resp := sendRequest(t, srv, "tools/call", 108, map[string]interface{}{
 		"name":      "get_dataset_info",
 		"arguments": map[string]interface{}{},
 	})
@@ -598,548 +338,12 @@ func TestToolsCall_MissingRequiredParam(t *testing.T) {
 	result, _ := resp.Result.(map[string]interface{})
 	isErr, _ := result["isError"].(bool)
 	if !isErr {
-		t.Error("should be an error when required param is missing")
+		t.Fatal("should be an error when required param is missing")
 	}
 	content, _ := result["content"].([]interface{})
 	first, _ := content[0].(map[string]interface{})
 	text, _ := first["text"].(string)
-	if !strings.Contains(text, "collection_id") {
-		t.Errorf("error should mention missing param, got: %s", text)
-	}
-}
-
-func TestToolsCall_BrowseCatalog(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/catalog", func(w http.ResponseWriter, r *http.Request) {
-		search := r.URL.Query().Get("search")
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `[{"id":"us-census","name":"US Census","category":"boundaries","search":"%s"}]`, search)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 11, map[string]interface{}{
-		"name": "browse_catalog",
-		"arguments": map[string]interface{}{
-			"search": "census",
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "us-census") {
-		t.Errorf("response should contain 'us-census', got: %s", text)
-	}
-}
-
-func TestToolsCall_ImportSTACAsset(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/stac/import", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			AssetURL   string `json:"asset_url"`
-			Name       string `json:"name"`
-			Format     string `json:"format"`
-			Namespace  string `json:"namespace"`
-			Collection string `json:"collection"`
-			CatalogURL string `json:"catalog_url"`
-			ProjectID  int64  `json:"project_id"`
-		}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body.ProjectID != 42 || body.Namespace != "demo" || body.Collection != "buildings" || body.CatalogURL != "https://example.com/stac" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `{"error":"bad-body"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprintf(w, `{"name":"%s","path":"data/%s.geojson","format":"geojson"}`, body.Name, body.Name)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 12, map[string]interface{}{
-		"name": "import_stac_asset",
-		"arguments": map[string]interface{}{
-			"asset_url":   "https://example.com/buildings.geojson",
-			"name":        "buildings",
-			"namespace":   "demo",
-			"collection":  "buildings",
-			"catalog_url": "https://example.com/stac",
-			"project_id":  42.0,
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "buildings") {
-		t.Errorf("response should contain 'buildings', got: %s", text)
-	}
-}
-
-func TestToolsCall_ImportFromCatalogScoped(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/catalog/import", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["catalog_id"] != "catalog-123" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing catalog_id"}`)
-			return
-		}
-		if body["project_id"] != float64(42) {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing project_id"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprint(w, `{"name":"roads","status":"pending"}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 241, map[string]interface{}{
-		"name": "import_from_catalog",
-		"arguments": map[string]interface{}{
-			"catalog_id": "catalog-123",
-			"project_id": 42.0,
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, `"status": "pending"`) {
-		t.Errorf("response should contain pending status, got: %s", text)
-	}
-}
-
-func TestToolsCall_RunProcess(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/process", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["output_name"] != "parks_buffered" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing output_name"}`)
-			return
-		}
-		if body["output_format"] != "parquet" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing output_format"}`)
-			return
-		}
-		if body["project_id"] != float64(42) {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing project_id"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"output":"buffered_%s","feature_count":10}`, body["input"])
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 10, map[string]interface{}{
-		"name": "run_process",
-		"arguments": map[string]interface{}{
-			"operation":  "buffer",
-			"input":      "parks",
-			"params":     map[string]interface{}{"distance": 500},
-			"output":     "parks_buffered",
-			"format":     "parquet",
-			"project_id": 42.0,
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "buffered_parks") {
-		t.Errorf("response should contain output name, got: %s", text)
-	}
-}
-
-func TestToolsCall_PreflightProcess(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/process/preflight", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["output_name"] != "parks_buffered" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing output_name"}`)
-			return
-		}
-		if body["project_id"] != float64(42) {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing project_id"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"valid":true,"resolved_params":{"distance":500}}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 23, map[string]interface{}{
-		"name": "preflight_process",
-		"arguments": map[string]interface{}{
-			"operation":  "buffer",
-			"input":      "parks",
-			"params":     map[string]interface{}{"distance": 500},
-			"output":     "parks_buffered",
-			"project_id": 42.0,
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, `"valid": true`) {
-		t.Errorf("response should contain valid preflight, got: %s", text)
-	}
-}
-
-func TestToolsCall_RunRasterProcess(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/raster/process", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["operation"] != "slope" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing operation"}`)
-			return
-		}
-		if _, ok := body["params"]; !ok {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing params"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"width":2,"height":2,"data":[1,2,3,4]}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 231, map[string]interface{}{
-		"name": "run_raster_process",
-		"arguments": map[string]interface{}{
-			"operation":  "slope",
-			"input_path": "/data/dem.tif",
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, `"width": 2`) {
-		t.Errorf("response should contain raster result, got: %s", text)
-	}
-}
-
-func TestToolsCall_MapAPIExportRasterBand(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /raster/{name}/export", func(w http.ResponseWriter, r *http.Request) {
-		if r.PathValue("name") != "elevation" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"message":"exported to /tmp/elevation.tif"}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 232, map[string]interface{}{
-		"name": "map_api",
-		"arguments": map[string]interface{}{
-			"operation": "export_raster_band",
-			"name":      "elevation",
-			"body": map[string]interface{}{
-				"output_path": "elevation.tif",
-				"band":        0,
-			},
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "exported to /tmp/elevation.tif") {
-		t.Errorf("response should contain export message, got: %s", text)
-	}
-}
-
-func TestToolsCall_MapAPIContour(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /raster/{name}/contour", func(w http.ResponseWriter, r *http.Request) {
-		if r.PathValue("name") != "elevation" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"type":"FeatureCollection","features":[]}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 233, map[string]interface{}{
-		"name": "map_api",
-		"arguments": map[string]interface{}{
-			"operation": "raster_contour",
-			"name":      "elevation",
-			"body": map[string]interface{}{
-				"interval": 10,
-			},
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "FeatureCollection") {
-		t.Errorf("response should contain contour GeoJSON, got: %s", text)
-	}
-}
-
-func TestToolsCall_MapAPIKDE(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/raster/kde", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"width":2,"height":2,"data":[0.1,0.2,0.3,0.4]}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 234, map[string]interface{}{
-		"name": "map_api",
-		"arguments": map[string]interface{}{
-			"operation": "raster_kde",
-			"body": map[string]interface{}{
-				"dataset":   "points",
-				"bandwidth": 50,
-			},
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, `"width": 2`) {
-		t.Errorf("response should contain kde grid, got: %s", text)
-	}
-}
-
-func TestToolsCall_SubmitProcessJob(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/process/jobs", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		if body["output_name"] != "parks_buffered" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing output_name"}`)
-			return
-		}
-		if body["project_id"] != float64(42) {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing project_id"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprint(w, `{"id":"job_123","status":"queued"}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 24, map[string]interface{}{
-		"name": "submit_process_job",
-		"arguments": map[string]interface{}{
-			"operation":  "buffer",
-			"input":      "parks",
-			"params":     map[string]interface{}{"distance": 500},
-			"output":     "parks_buffered",
-			"project_id": 42.0,
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "job_123") {
-		t.Errorf("response should contain job id, got: %s", text)
-	}
-}
-
-func TestToolsCall_CreatePipeline(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/pipelines", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		if body["name"] != "Suitability model" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing name"}`)
-			return
-		}
-		if _, ok := body["graph"]; !ok {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing graph"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		fmt.Fprint(w, `{"id":"pipe_123","name":"Suitability model","version":1}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 241, map[string]interface{}{
-		"name": "create_pipeline",
-		"arguments": map[string]interface{}{
-			"name":        "Suitability model",
-			"description": "Buffer and clip",
-			"graph": map[string]interface{}{
-				"nodes": []interface{}{map[string]interface{}{"id": "n1"}},
-				"edges": []interface{}{},
-			},
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "pipe_123") {
-		t.Errorf("response should contain pipeline id, got: %s", text)
-	}
-}
-
-func TestToolsCall_ExecuteSavedPipeline(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/pipelines/{id}/execute", func(w http.ResponseWriter, r *http.Request) {
-		if r.PathValue("id") != "pipe_123" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"pipeline_id":"pipe_123","status":"submitted","node_count":1,"edge_count":0}`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 242, map[string]interface{}{
-		"name": "execute_saved_pipeline",
-		"arguments": map[string]interface{}{
-			"pipeline_id": "pipe_123",
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, `"status": "submitted"`) {
-		t.Errorf("response should contain submitted status, got: %s", text)
-	}
-}
-
-func TestToolsCall_ListProcessJobs(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/process/jobs", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("status") != "queued" || r.URL.Query().Get("limit") != "25" {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing filters"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `[{"id":"job_123","status":"queued"}]`)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 25, map[string]interface{}{
-		"name": "list_process_jobs",
-		"arguments": map[string]interface{}{
-			"status": "queued",
-			"limit":  25.0,
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "job_123") {
-		t.Errorf("response should contain job id, got: %s", text)
-	}
-}
-
-func TestToolsCall_CancelProcessJob(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("DELETE /api/process/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if r.PathValue("id") != "job_123" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	srv := testServer(t, mux)
-
-	resp := sendRequest(t, srv, "tools/call", 26, map[string]interface{}{
-		"name": "cancel_process_job",
-		"arguments": map[string]interface{}{
-			"job_id": "job_123",
-		},
-	})
-
-	if resp.Error != nil {
-		t.Fatalf("unexpected error: %v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	content, _ := result["content"].([]interface{})
-	first, _ := content[0].(map[string]interface{})
-	text, _ := first["text"].(string)
-	if !strings.Contains(text, "cancelled") {
-		t.Errorf("response should contain cancellation status, got: %s", text)
+	if !strings.Contains(text, "name") {
+		t.Fatalf("error should mention missing param, got: %s", text)
 	}
 }

@@ -1,9 +1,9 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 )
@@ -32,36 +32,52 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		return handleListDatasets(client)
 	case "get_dataset_info":
 		return handleGetDatasetInfo(client, params)
-	case "get_dataset_schema":
-		return handleGetDatasetSchema(client, params)
-	case "get_dataset_profile":
-		return handleGetDatasetProfile(client, params)
 	case "query_features":
 		return handleQueryFeatures(client, params)
 	case "get_feature":
 		return handleGetFeature(client, params)
+	case "create_feature":
+		return handleCreateFeature(client, params)
+	case "update_feature":
+		return handleUpdateFeature(client, params)
+	case "delete_feature":
+		return handleDeleteFeature(client, params)
 	case "upload_dataset":
 		return handleUploadDataset(client, params)
-	case "run_process":
-		return handleRunProcess(client, params)
-	case "run_raster_process":
-		return handleRunRasterProcess(client, params)
-	case "preflight_process":
-		return handlePreflightProcess(client, params)
-	case "submit_process_job":
-		return handleSubmitProcessJob(client, params)
-	case "submit_process_batch":
-		return handleSubmitProcessBatch(client, params)
-	case "list_process_jobs":
-		return handleListProcessJobs(client, params)
-	case "get_process_job":
-		return handleGetProcessJob(client, params)
-	case "cancel_process_job":
-		return handleCancelProcessJob(client, params)
-	case "rerun_process_job":
-		return handleRerunProcessJob(client, params)
-	case "list_pipeline_templates":
-		return handleListPipelineTemplates(client)
+	case "import_source":
+		return handleImportSource(client, params)
+	case "get_scene_manifest":
+		return handleGetSceneManifest(client)
+	case "list_bodies":
+		return handleListBodies(client)
+	case "get_body":
+		return handleGetBody(client, params)
+	case "get_body_recipes":
+		return handleGetBodyRecipes(client, params)
+	case "execute_body_recipe":
+		return handleExecuteBodyRecipe(client, params)
+	case "list_operations":
+		return handleListOperations(client, params)
+	case "preflight_operation":
+		return handlePreflightOperation(client, params)
+	case "run_operation":
+		return handleRunOperation(client, params)
+	case "submit_operation_job":
+		return handleSubmitOperationJob(client, params)
+	case "submit_operation_batch":
+		return handleSubmitOperationBatch(client, params)
+	case "list_operation_jobs":
+		return handleListOperationJobs(client, params)
+	case "get_operation_job":
+		return handleGetOperationJob(client, params)
+	case "cancel_operation_job":
+		return handleCancelOperationJob(client, params)
+	case "rerun_operation_job":
+		return handleRerunOperationJob(client, params)
+	case "list_pipeline_operations":
+		return handleListPipelineOperations(client)
+	case "run_pipeline":
+		return handleRunPipeline(client, params)
 	case "list_pipelines":
 		return handleListPipelines(client)
 	case "get_pipeline":
@@ -76,100 +92,47 @@ func HandleToolCall(client *Client, name string, args json.RawMessage) (string, 
 		return handleDuplicatePipeline(client, params)
 	case "execute_saved_pipeline":
 		return handleExecuteSavedPipeline(client, params)
-	case "run_pipeline":
-		return handleRunPipeline(client, params)
-	case "convert_format":
-		return handleConvertFormat(client, params)
-	case "diff_datasets":
-		return handleDiffDatasets(client, params)
+	case "list_pipeline_runs":
+		return handleListPipelineRuns(client, params)
+	case "get_pipeline_run":
+		return handleGetPipelineRun(client, params)
+	case "list_query_engines":
+		return handleListQueryEngines(client)
+	case "get_query_engine_info":
+		return handleGetQueryEngineInfo(client, params)
+	case "list_query_datasets":
+		return handleListQueryDatasets(client, params)
 	case "execute_sql":
 		return handleExecuteSQL(client, params)
-	case "list_spatial_tables":
-		return handleListSpatialTables(client)
-	case "get_duckdb_info":
-		return handleGetDuckDBInfo(client)
-	case "list_duckdb_datasets":
-		return handleListDuckDBDatasets(client)
-	case "geocode":
-		return handleGeocode(client, params)
-	case "reverse_geocode":
-		return handleReverseGeocode(client, params)
-	case "compute_route":
-		return handleComputeRoute(client, params)
-	case "compute_isochrone":
-		return handleComputeIsochrone(client, params)
-	case "compute_route_matrix":
-		return handleComputeRouteMatrix(client, params)
-	case "compute_service_area":
-		return handleComputeServiceArea(client, params)
-	case "list_operations":
-		return handleListOperations(client)
-	case "list_analysis_operations":
-		return handleListAnalysisOperations(client)
-	case "browse_catalog":
-		return handleBrowseCatalog(client, params)
-	case "browse_catalog_enhanced":
-		return handleBrowseEnhancedCatalog(client, params)
-	case "get_catalog_entry":
-		return handleGetCatalogEntry(client, params)
-	case "list_catalog_categories":
-		return handleListCatalogCategories(client)
-	case "list_catalog_tags":
-		return handleListCatalogTags(client, params)
-	case "import_from_catalog":
-		return handleImportFromCatalog(client, params)
-	case "browse_stac_catalog":
-		return handleBrowseSTACCatalog(client, params)
-	case "browse_stac_collections":
-		return handleBrowseSTACCollections(client, params)
-	case "browse_stac_items":
-		return handleBrowseSTACItems(client, params)
-	case "import_stac_asset":
-		return handleImportSTACAsset(client, params)
-	case "search_stac":
-		return handleSearchSTAC(client, params)
-	case "map_api":
-		return handleMapAPI(client, params)
+	case "save_sql_result":
+		return handleSaveSQLResult(client, params)
+	case "list_projects":
+		return handleListProjects(client)
+	case "get_project":
+		return handleGetProject(client, params)
+	case "create_project":
+		return handleCreateProject(client, params)
+	case "update_project":
+		return handleUpdateProject(client, params)
+	case "delete_project":
+		return handleDeleteProject(client, params)
+	case "get_project_workspace":
+		return handleGetProjectWorkspace(client, params)
+	case "set_project_workspace":
+		return handleSetProjectWorkspace(client, params)
+	case "publish_map":
+		return handlePublishMap(client, params)
+	case "list_published_maps":
+		return handleListPublishedMaps(client)
+	case "delete_published_map":
+		return handleDeletePublishedMap(client, params)
+	case "get_published_map_stats":
+		return handleGetPublishedMapStats(client, params)
+	case "update_map_embed_config":
+		return handleUpdateMapEmbedConfig(client, params)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", name)
 	}
-}
-
-type apiOperation struct {
-	Method   string
-	Path     string
-	Mutating bool
-}
-
-var mapOperations = map[string]apiOperation{
-	"publish_map":             {Method: "POST", Path: "/api/maps/publish", Mutating: true},
-	"list_published_maps":     {Method: "GET", Path: "/api/maps/published"},
-	"unpublish_map":           {Method: "DELETE", Path: "/api/maps/published/{token}", Mutating: true},
-	"get_published_map_stats": {Method: "GET", Path: "/api/maps/published/{token}/stats"},
-	"update_map_embed_config": {Method: "PUT", Path: "/api/maps/published/{token}/embed-config", Mutating: true},
-	"get_public_map":          {Method: "GET", Path: "/public/maps/{token}"},
-	"get_raster_info":         {Method: "GET", Path: "/raster/{name}/info"},
-	"get_raster_stats":        {Method: "GET", Path: "/raster/{name}/stats"},
-	"get_raster_histogram":    {Method: "GET", Path: "/raster/{name}/histogram"},
-	"get_raster_dimensions":   {Method: "GET", Path: "/raster/{name}/dimensions"},
-	"get_raster_values":       {Method: "GET", Path: "/raster/{name}/values"},
-	"raster_zonal_stats":      {Method: "POST", Path: "/raster/{name}/zonal-stats"},
-	"export_raster_band":      {Method: "POST", Path: "/raster/{name}/export"},
-	"raster_contour":          {Method: "POST", Path: "/raster/{name}/contour"},
-	"raster_viewshed":         {Method: "POST", Path: "/raster/{name}/viewshed"},
-	"raster_profile":          {Method: "POST", Path: "/raster/{name}/profile"},
-	"raster_kde":              {Method: "POST", Path: "/api/raster/kde"},
-	"raster_slope":            {Method: "POST", Path: "/raster/{name}/slope"},
-	"raster_aspect":           {Method: "POST", Path: "/raster/{name}/aspect"},
-	"geodesic_area":           {Method: "POST", Path: "/api/geodesic/area"},
-	"geodesic_length":         {Method: "POST", Path: "/api/geodesic/length"},
-	"classify_kmeans":         {Method: "POST", Path: "/api/raster/classify/kmeans"},
-	"classify_isodata":        {Method: "POST", Path: "/api/raster/classify/isodata"},
-	"classify_ml":             {Method: "POST", Path: "/api/raster/classify/ml"},
-	"classify_rf":             {Method: "POST", Path: "/api/raster/classify/rf"},
-	"create_feature":          {Method: "POST", Path: "/collections/{collection_id}/items", Mutating: true},
-	"update_feature":          {Method: "PUT", Path: "/collections/{collection_id}/items/{feature_id}", Mutating: true},
-	"delete_feature":          {Method: "DELETE", Path: "/collections/{collection_id}/items/{feature_id}", Mutating: true},
 }
 
 func handleListDatasets(client *Client) (string, error) {
@@ -181,62 +144,69 @@ func handleListDatasets(client *Client) (string, error) {
 }
 
 func handleGetDatasetInfo(client *Client, params map[string]interface{}) (string, error) {
-	id, err := requireString(params, "collection_id")
+	name, err := requireStringLike(params, "name")
 	if err != nil {
 		return "", err
 	}
-	data, err := client.GetCollection(id)
+	collection, err := client.GetCollection(name)
 	if err != nil {
 		return "", err
 	}
-	return formatJSON(data), nil
-}
-
-func handleGetDatasetSchema(client *Client, params map[string]interface{}) (string, error) {
-	name, err := requireString(params, "name")
+	schema, err := client.GetDatasetSchema(name)
 	if err != nil {
 		return "", err
 	}
-	data, err := client.GetDatasetSchema(name)
+	profile, err := client.GetDatasetProfile(name)
 	if err != nil {
 		return "", err
 	}
-	return formatJSON(data), nil
-}
-
-func handleGetDatasetProfile(client *Client, params map[string]interface{}) (string, error) {
-	name, err := requireString(params, "name")
-	if err != nil {
-		return "", err
+	combined := map[string]interface{}{
+		"collection": mustJSONObject(collection),
+		"schema":     mustJSONObject(schema),
+		"profile":    mustJSONObject(profile),
 	}
-	data, err := client.GetDatasetProfile(name)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
+	return formatJSON(combined), nil
 }
 
 func handleQueryFeatures(client *Client, params map[string]interface{}) (string, error) {
-	id, err := requireString(params, "collection_id")
+	id, err := requireStringLike(params, "collection_id")
 	if err != nil {
 		return "", err
 	}
-	qp := stringLikeParams(params, "bbox", "filter", "datetime", "limit", "offset", "properties", "sortby")
-	if v, ok := params["bbox_crs"]; ok {
-		if s, err := stringify(v); err == nil && s != "" {
-			qp["bbox-crs"] = s
+	query := map[string]string{}
+	for _, key := range []string{"bbox", "filter", "datetime", "limit", "offset", "cursor"} {
+		if value, ok := params[key]; ok {
+			text, err := stringify(value)
+			if err != nil {
+				return "", fmt.Errorf("%s: %w", key, err)
+			}
+			if text != "" {
+				query[key] = text
+			}
 		}
 	}
-	if v, ok := params["crs"]; ok {
-		if s, err := stringify(v); err == nil && s != "" {
-			qp["crs"] = s
+	if value, ok := params["bbox_crs"]; ok {
+		text, err := stringify(value)
+		if err != nil {
+			return "", fmt.Errorf("bbox_crs: %w", err)
+		}
+		if text != "" {
+			query["bbox-crs"] = text
 		}
 	}
-	// Default to a reasonable limit to avoid dumping huge responses.
-	if _, ok := qp["limit"]; !ok {
-		qp["limit"] = "10"
+	if value, ok := params["crs"]; ok {
+		text, err := stringify(value)
+		if err != nil {
+			return "", fmt.Errorf("crs: %w", err)
+		}
+		if text != "" {
+			query["crs"] = text
+		}
 	}
-	data, err := client.QueryFeatures(id, qp)
+	if _, ok := query["limit"]; !ok {
+		query["limit"] = "10"
+	}
+	data, err := client.QueryFeatures(id, query)
 	if err != nil {
 		return "", err
 	}
@@ -244,15 +214,67 @@ func handleQueryFeatures(client *Client, params map[string]interface{}) (string,
 }
 
 func handleGetFeature(client *Client, params map[string]interface{}) (string, error) {
-	collID, err := requireString(params, "collection_id")
+	collectionID, err := requireStringLike(params, "collection_id")
 	if err != nil {
 		return "", err
 	}
-	fid, err := requireString(params, "feature_id")
+	featureID, err := requireStringLike(params, "feature_id")
 	if err != nil {
 		return "", err
 	}
-	data, err := client.GetFeature(collID, fid)
+	data, err := client.GetFeature(collectionID, featureID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleCreateFeature(client *Client, params map[string]interface{}) (string, error) {
+	collectionID, err := requireStringLike(params, "collection_id")
+	if err != nil {
+		return "", err
+	}
+	feature, err := requireObject(params, "feature")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.CreateFeature(collectionID, feature)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleUpdateFeature(client *Client, params map[string]interface{}) (string, error) {
+	collectionID, err := requireStringLike(params, "collection_id")
+	if err != nil {
+		return "", err
+	}
+	featureID, err := requireStringLike(params, "feature_id")
+	if err != nil {
+		return "", err
+	}
+	feature, err := requireObject(params, "feature")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.UpdateFeature(collectionID, featureID, feature)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleDeleteFeature(client *Client, params map[string]interface{}) (string, error) {
+	collectionID, err := requireStringLike(params, "collection_id")
+	if err != nil {
+		return "", err
+	}
+	featureID, err := requireStringLike(params, "feature_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.DeleteFeature(collectionID, featureID)
 	if err != nil {
 		return "", err
 	}
@@ -260,132 +282,244 @@ func handleGetFeature(client *Client, params map[string]interface{}) (string, er
 }
 
 func handleUploadDataset(client *Client, params map[string]interface{}) (string, error) {
-	path, err := requireString(params, "file_path")
+	filePath, err := requireStringLike(params, "file_path")
 	if err != nil {
 		return "", err
 	}
 	name, _ := optionalStringLike(params, "name")
-	data, err := client.UploadFile(path, name, client.ProjectID)
+	bodyID, _ := optionalStringLike(params, "body_id")
+	data, err := client.UploadFile(filePath, name, client.ProjectID, bodyID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleRunProcess(client *Client, params map[string]interface{}) (string, error) {
-	normalizeProcessPayload(params, client.ProjectID)
-	data, err := client.RunProcess(params)
+func handleImportSource(client *Client, params map[string]interface{}) (string, error) {
+	payload, err := normalizeImportSourcePayload(params, client.ProjectID)
+	if err != nil {
+		return "", err
+	}
+	data, err := client.ImportSource(payload)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleRunRasterProcess(client *Client, params map[string]interface{}) (string, error) {
-	normalizeRasterProcessPayload(params)
-	data, err := client.RunRasterProcess(params)
+func handleGetSceneManifest(client *Client) (string, error) {
+	data, err := client.GetSceneManifest()
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handlePreflightProcess(client *Client, params map[string]interface{}) (string, error) {
-	normalizeProcessPayload(params, client.ProjectID)
-	data, err := client.PreflightProcess(params)
+func handleListBodies(client *Client) (string, error) {
+	data, err := client.ListBodies()
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleSubmitProcessJob(client *Client, params map[string]interface{}) (string, error) {
-	normalizeProcessPayload(params, client.ProjectID)
-	data, err := client.SubmitProcessJob(params)
+func handleGetBody(client *Client, params map[string]interface{}) (string, error) {
+	slug, err := requireStringLike(params, "slug")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.GetBody(slug)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleSubmitProcessBatch(client *Client, params map[string]interface{}) (string, error) {
-	jobs, ok := params["jobs"].([]interface{})
-	if !ok || len(jobs) == 0 {
-		return "", fmt.Errorf("parameter jobs must be a non-empty array")
+func handleGetBodyRecipes(client *Client, params map[string]interface{}) (string, error) {
+	slug, err := requireStringLike(params, "slug")
+	if err != nil {
+		return "", err
 	}
-	for i, item := range jobs {
+	data, err := client.GetBodyRecipes(slug)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleExecuteBodyRecipe(client *Client, params map[string]interface{}) (string, error) {
+	slug, err := requireStringLike(params, "slug")
+	if err != nil {
+		return "", err
+	}
+	sourceID, err := requireStringLike(params, "source_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.ExecuteBodyRecipe(slug, sourceID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleListOperations(client *Client, params map[string]interface{}) (string, error) {
+	domain, _ := optionalStringLike(params, "domain")
+	data, err := client.ListOperations(domain)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handlePreflightOperation(client *Client, params map[string]interface{}) (string, error) {
+	payload, operation, err := normalizeOperationPayload(params, client.ProjectID)
+	if err != nil {
+		return "", err
+	}
+	payload["operation"] = operation
+	data, err := client.PreflightOperation(payload)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleRunOperation(client *Client, params map[string]interface{}) (string, error) {
+	payload, operation, err := normalizeOperationPayload(params, client.ProjectID)
+	if err != nil {
+		return "", err
+	}
+	data, err := client.RunOperation(operation, payload)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleSubmitOperationJob(client *Client, params map[string]interface{}) (string, error) {
+	payload, operation, err := normalizeOperationPayload(params, client.ProjectID)
+	if err != nil {
+		return "", err
+	}
+	data, err := client.SubmitOperationJob(operation, payload)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleSubmitOperationBatch(client *Client, params map[string]interface{}) (string, error) {
+	rawJobs, err := requireArray(params, "jobs")
+	if err != nil {
+		return "", err
+	}
+	jobs := make([]map[string]interface{}, 0, len(rawJobs))
+	for i, item := range rawJobs {
 		job, ok := item.(map[string]interface{})
 		if !ok {
 			return "", fmt.Errorf("jobs[%d] must be an object", i)
 		}
-		req, ok := job["request"].(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("jobs[%d].request must be an object", i)
+		normalized := map[string]interface{}{}
+		if clientID, err := optionalStringLike(job, "client_id"); err == nil && clientID != "" {
+			normalized["client_id"] = clientID
 		}
-		normalizeProcessPayload(req, client.ProjectID)
+		if dependsOn, ok := job["depends_on"]; ok {
+			normalized["depends_on"] = dependsOn
+		}
+		requestObject, err := requireObject(job, "request")
+		if err != nil {
+			return "", fmt.Errorf("jobs[%d]: %w", i, err)
+		}
+		payload, operation, err := normalizeOperationPayload(requestObject, client.ProjectID)
+		if err != nil {
+			return "", fmt.Errorf("jobs[%d]: %w", i, err)
+		}
+		normalized["request"] = map[string]interface{}{
+			"operation": operation,
+		}
+		for key, value := range payload {
+			normalized["request"].(map[string]interface{})[key] = value
+		}
+		jobs = append(jobs, normalized)
 	}
-	data, err := client.SubmitProcessBatch(params)
+	data, err := client.SubmitOperationBatch(map[string]interface{}{"jobs": jobs})
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleListProcessJobs(client *Client, params map[string]interface{}) (string, error) {
-	qp := map[string]string{}
+func handleListOperationJobs(client *Client, params map[string]interface{}) (string, error) {
+	query := map[string]string{}
 	for _, key := range []string{"status", "search", "limit", "offset"} {
-		if v, ok := params[key]; ok {
-			s, err := stringify(v)
-			if err == nil && s != "" {
-				qp[key] = s
+		if value, ok := params[key]; ok {
+			text, err := stringify(value)
+			if err != nil {
+				return "", fmt.Errorf("%s: %w", key, err)
+			}
+			if text != "" {
+				query[key] = text
 			}
 		}
 	}
-	data, err := client.ListProcessJobs(qp)
+	data, err := client.ListOperationJobs(query)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleGetProcessJob(client *Client, params map[string]interface{}) (string, error) {
-	jobID, err := requireString(params, "job_id")
+func handleGetOperationJob(client *Client, params map[string]interface{}) (string, error) {
+	jobID, err := requireStringLike(params, "job_id")
 	if err != nil {
 		return "", err
 	}
-	data, err := client.GetProcessJob(jobID)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleCancelProcessJob(client *Client, params map[string]interface{}) (string, error) {
-	jobID, err := requireString(params, "job_id")
-	if err != nil {
-		return "", err
-	}
-	data, err := client.CancelProcessJob(jobID)
+	data, err := client.GetOperationJob(jobID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleRerunProcessJob(client *Client, params map[string]interface{}) (string, error) {
-	jobID, err := requireString(params, "job_id")
+func handleCancelOperationJob(client *Client, params map[string]interface{}) (string, error) {
+	jobID, err := requireStringLike(params, "job_id")
 	if err != nil {
 		return "", err
 	}
-	data, err := client.RerunProcessJob(jobID)
+	data, err := client.CancelOperationJob(jobID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleListPipelineTemplates(client *Client) (string, error) {
-	data, err := client.ListPipelineTemplates()
+func handleRerunOperationJob(client *Client, params map[string]interface{}) (string, error) {
+	jobID, err := requireStringLike(params, "job_id")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.RerunOperationJob(jobID)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleListPipelineOperations(client *Client) (string, error) {
+	data, err := client.ListPipelineOperations()
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleRunPipeline(client *Client, params map[string]interface{}) (string, error) {
+	payload, err := normalizePipelinePayload(params)
+	if err != nil {
+		return "", err
+	}
+	data, err := client.RunPipeline(payload)
 	if err != nil {
 		return "", err
 	}
@@ -401,7 +535,7 @@ func handleListPipelines(client *Client) (string, error) {
 }
 
 func handleGetPipeline(client *Client, params map[string]interface{}) (string, error) {
-	pipelineID, err := requireString(params, "pipeline_id")
+	pipelineID, err := requireStringLike(params, "pipeline_id")
 	if err != nil {
 		return "", err
 	}
@@ -413,15 +547,13 @@ func handleGetPipeline(client *Client, params map[string]interface{}) (string, e
 }
 
 func handleCreatePipeline(client *Client, params map[string]interface{}) (string, error) {
-	name, err := requireString(params, "name")
+	name, err := requireStringLike(params, "name")
 	if err != nil {
 		return "", err
 	}
-	payload := map[string]interface{}{
-		"name": name,
-	}
-	if desc, err := optionalStringLike(params, "description"); err == nil && desc != "" {
-		payload["description"] = desc
+	payload := map[string]interface{}{"name": name}
+	if description, err := optionalStringLike(params, "description"); err == nil && description != "" {
+		payload["description"] = description
 	}
 	if graph, ok := params["graph"]; ok {
 		payload["graph"] = graph
@@ -437,11 +569,11 @@ func handleCreatePipeline(client *Client, params map[string]interface{}) (string
 }
 
 func handleUpdatePipeline(client *Client, params map[string]interface{}) (string, error) {
-	pipelineID, err := requireString(params, "pipeline_id")
+	pipelineID, err := requireStringLike(params, "pipeline_id")
 	if err != nil {
 		return "", err
 	}
-	name, err := requireString(params, "name")
+	name, err := requireStringLike(params, "name")
 	if err != nil {
 		return "", err
 	}
@@ -449,12 +581,9 @@ func handleUpdatePipeline(client *Client, params map[string]interface{}) (string
 	if err != nil {
 		return "", err
 	}
-	payload := map[string]interface{}{
-		"name":    name,
-		"version": version,
-	}
-	if desc, err := optionalStringLike(params, "description"); err == nil && desc != "" {
-		payload["description"] = desc
+	payload := map[string]interface{}{"name": name, "version": version}
+	if description, err := optionalStringLike(params, "description"); err == nil && description != "" {
+		payload["description"] = description
 	}
 	if graph, ok := params["graph"]; ok {
 		payload["graph"] = graph
@@ -470,7 +599,7 @@ func handleUpdatePipeline(client *Client, params map[string]interface{}) (string
 }
 
 func handleDeletePipeline(client *Client, params map[string]interface{}) (string, error) {
-	pipelineID, err := requireString(params, "pipeline_id")
+	pipelineID, err := requireStringLike(params, "pipeline_id")
 	if err != nil {
 		return "", err
 	}
@@ -482,7 +611,7 @@ func handleDeletePipeline(client *Client, params map[string]interface{}) (string
 }
 
 func handleDuplicatePipeline(client *Client, params map[string]interface{}) (string, error) {
-	pipelineID, err := requireString(params, "pipeline_id")
+	pipelineID, err := requireStringLike(params, "pipeline_id")
 	if err != nil {
 		return "", err
 	}
@@ -494,7 +623,7 @@ func handleDuplicatePipeline(client *Client, params map[string]interface{}) (str
 }
 
 func handleExecuteSavedPipeline(client *Client, params map[string]interface{}) (string, error) {
-	pipelineID, err := requireString(params, "pipeline_id")
+	pipelineID, err := requireStringLike(params, "pipeline_id")
 	if err != nil {
 		return "", err
 	}
@@ -505,83 +634,56 @@ func handleExecuteSavedPipeline(client *Client, params map[string]interface{}) (
 	return formatJSON(data), nil
 }
 
-func handleRunPipeline(client *Client, params map[string]interface{}) (string, error) {
-	if _, ok := params["output_name"]; !ok {
-		if out, ok := params["output"].(string); ok && out != "" {
-			params["output_name"] = out
-		}
+func handleListPipelineRuns(client *Client, params map[string]interface{}) (string, error) {
+	pipelineID, err := requireStringLike(params, "pipeline_id")
+	if err != nil {
+		return "", err
 	}
-	if _, ok := params["input"]; !ok {
-		if steps, ok := params["steps"].([]interface{}); ok && len(steps) > 0 {
-			if step0, ok := steps[0].(map[string]interface{}); ok {
-				if in, ok := step0["input"].(string); ok && in != "" {
-					params["input"] = in
-				}
-			}
-		}
-	}
-	ensureProjectID(params, client.ProjectID)
-	data, err := client.RunPipeline(params)
+	data, err := client.ListPipelineRuns(pipelineID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleConvertFormat(client *Client, params map[string]interface{}) (string, error) {
-	if _, ok := params["output_format"]; !ok {
-		if format, ok := params["format"].(string); ok && format != "" {
-			params["output_format"] = format
-		}
+func handleGetPipelineRun(client *Client, params map[string]interface{}) (string, error) {
+	runID, err := requireStringLike(params, "run_id")
+	if err != nil {
+		return "", err
 	}
-	if _, ok := params["output_name"]; !ok {
-		if out, ok := params["output"].(string); ok && out != "" {
-			params["output_name"] = out
-		}
-	}
-	ensureProjectID(params, client.ProjectID)
-	data, err := client.ConvertFormat(params)
+	data, err := client.GetPipelineRun(runID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func normalizeProcessPayload(params map[string]interface{}, projectID string) {
-	if _, ok := params["output_name"]; !ok {
-		if out, ok := params["output"].(string); ok && out != "" {
-			params["output_name"] = out
-		}
+func handleListQueryEngines(client *Client) (string, error) {
+	data, err := client.ListQueryEngines()
+	if err != nil {
+		return "", err
 	}
-	if _, ok := params["output_format"]; !ok {
-		if format, ok := params["format"].(string); ok && format != "" {
-			params["output_format"] = format
-		}
-	}
-	if _, ok := params["params"]; !ok || params["params"] == nil {
-		params["params"] = map[string]interface{}{}
-	}
-	ensureProjectID(params, projectID)
+	return formatJSON(data), nil
 }
 
-func normalizeRasterProcessPayload(params map[string]interface{}) {
-	if _, ok := params["params"]; !ok || params["params"] == nil {
-		params["params"] = map[string]interface{}{}
+func handleGetQueryEngineInfo(client *Client, params map[string]interface{}) (string, error) {
+	engine, err := requireStringLike(params, "engine")
+	if err != nil {
+		return "", err
 	}
+	data, err := client.GetQueryEngineInfo(engine)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
 }
 
-func handleDiffDatasets(client *Client, params map[string]interface{}) (string, error) {
-	if _, ok := params["left"]; !ok {
-		if base, ok := params["base"].(string); ok && base != "" {
-			params["left"] = base
-		}
+func handleListQueryDatasets(client *Client, params map[string]interface{}) (string, error) {
+	engine, err := requireStringLike(params, "engine")
+	if err != nil {
+		return "", err
 	}
-	if _, ok := params["right"]; !ok {
-		if cmp, ok := params["compare"].(string); ok && cmp != "" {
-			params["right"] = cmp
-		}
-	}
-	data, err := client.DiffDatasets(params)
+	data, err := client.ListQueryDatasets(engine)
 	if err != nil {
 		return "", err
 	}
@@ -589,598 +691,452 @@ func handleDiffDatasets(client *Client, params map[string]interface{}) (string, 
 }
 
 func handleExecuteSQL(client *Client, params map[string]interface{}) (string, error) {
-	query, err := requireString(params, "query")
+	engine, err := requireStringLike(params, "engine")
 	if err != nil {
 		return "", err
 	}
-	data, err := client.ExecuteSQL(query)
+	payload, err := normalizeSQLExecutePayload(params)
 	if err != nil {
 		return "", err
 	}
-	return formatJSON(data), nil
-}
-
-func handleListSpatialTables(client *Client) (string, error) {
-	data, err := client.ListSpatialTables()
+	data, err := client.ExecuteSQL(engine, payload)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleGetDuckDBInfo(client *Client) (string, error) {
-	data, err := client.GetDuckDBInfo()
+func handleSaveSQLResult(client *Client, params map[string]interface{}) (string, error) {
+	engine, err := requireStringLike(params, "engine")
+	if err != nil {
+		return "", err
+	}
+	payload, err := normalizeSQLSavePayload(params)
+	if err != nil {
+		return "", err
+	}
+	ensureProjectID(payload, client.ProjectID)
+	data, err := client.SaveSQLResult(engine, payload)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleListDuckDBDatasets(client *Client) (string, error) {
-	data, err := client.ListDuckDBDatasets()
+func handleListProjects(client *Client) (string, error) {
+	data, err := client.ListProjects()
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleGeocode(client *Client, params map[string]interface{}) (string, error) {
-	addr, err := requireString(params, "address")
+func handleGetProject(client *Client, params map[string]interface{}) (string, error) {
+	projectID, err := requireStringLike(params, "project_id")
 	if err != nil {
 		return "", err
 	}
-	data, err := client.Geocode(addr)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleReverseGeocode(client *Client, params map[string]interface{}) (string, error) {
-	lat, err := requireStringLike(params, "lat")
-	if err != nil {
-		return "", err
-	}
-	lon, err := requireStringLike(params, "lon")
-	if err != nil {
-		return "", err
-	}
-	data, err := client.ReverseGeocode(lat, lon)
+	data, err := client.GetProject(projectID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleComputeRoute(client *Client, params map[string]interface{}) (string, error) {
-	origin, hasOrigin := params["origin"]
-	destination, hasDestination := params["destination"]
-	if hasOrigin && hasDestination {
-		waypoints := make([][2]float64, 0, 2)
-		pt, err := parseRoutePoint(origin)
-		if err != nil {
-			return "", fmt.Errorf("origin: %w", err)
-		}
-		waypoints = append(waypoints, pt)
-
-		if raw, ok := params["waypoints"].([]interface{}); ok {
-			for i, wp := range raw {
-				pt, err := parseRoutePoint(wp)
-				if err != nil {
-					return "", fmt.Errorf("waypoints[%d]: %w", i, err)
-				}
-				waypoints = append(waypoints, pt)
-			}
-		}
-
-		pt, err = parseRoutePoint(destination)
-		if err != nil {
-			return "", fmt.Errorf("destination: %w", err)
-		}
-		waypoints = append(waypoints, pt)
-		params["waypoints"] = waypoints
+func handleCreateProject(client *Client, params map[string]interface{}) (string, error) {
+	name, err := requireStringLike(params, "name")
+	if err != nil {
+		return "", err
 	}
-	data, err := client.ComputeRoute(params)
+	payload := map[string]interface{}{"name": name}
+	if description, err := optionalStringLike(params, "description"); err == nil && description != "" {
+		payload["description"] = description
+	}
+	data, err := client.CreateProject(payload)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleComputeIsochrone(client *Client, params map[string]interface{}) (string, error) {
-	if origin, ok := params["origin"]; ok {
-		pt, err := parseRoutePoint(origin)
-		if err != nil {
-			return "", fmt.Errorf("origin: %w", err)
-		}
-		params["lng"] = pt[0]
-		params["lat"] = pt[1]
+func handleUpdateProject(client *Client, params map[string]interface{}) (string, error) {
+	projectID, err := requireStringLike(params, "project_id")
+	if err != nil {
+		return "", err
 	}
-	data, err := client.ComputeIsochrone(params)
+	payload := map[string]interface{}{}
+	if name, err := optionalStringLike(params, "name"); err == nil && name != "" {
+		payload["name"] = name
+	}
+	if description, ok := params["description"]; ok {
+		payload["description"] = description
+	}
+	data, err := client.UpdateProject(projectID, payload)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleComputeRouteMatrix(client *Client, params map[string]interface{}) (string, error) {
-	if raw, ok := params["origins"].([]interface{}); ok {
-		pts, err := parseRoutePoints(raw)
-		if err != nil {
-			return "", fmt.Errorf("origins: %w", err)
-		}
-		params["origins"] = pts
+func handleDeleteProject(client *Client, params map[string]interface{}) (string, error) {
+	projectID, err := requireStringLike(params, "project_id")
+	if err != nil {
+		return "", err
 	}
-	if raw, ok := params["destinations"].([]interface{}); ok {
-		pts, err := parseRoutePoints(raw)
-		if err != nil {
-			return "", fmt.Errorf("destinations: %w", err)
-		}
-		params["destinations"] = pts
-	}
-	data, err := client.ComputeRouteMatrix(params)
+	data, err := client.DeleteProject(projectID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleComputeServiceArea(client *Client, params map[string]interface{}) (string, error) {
-	if origin, ok := params["origin"]; ok {
-		pt, err := parseRoutePoint(origin)
-		if err != nil {
-			return "", fmt.Errorf("origin: %w", err)
-		}
-		params["lng"] = pt[0]
-		params["lat"] = pt[1]
+func handleGetProjectWorkspace(client *Client, params map[string]interface{}) (string, error) {
+	projectID, err := requireStringLike(params, "project_id")
+	if err != nil {
+		return "", err
 	}
-	data, err := client.ComputeServiceArea(params)
+	data, err := client.GetProjectWorkspace(projectID)
 	if err != nil {
 		return "", err
 	}
 	return formatJSON(data), nil
 }
 
-func handleListOperations(client *Client) (string, error) {
-	data, err := client.ListOperations()
+func handleSetProjectWorkspace(client *Client, params map[string]interface{}) (string, error) {
+	projectID, err := requireStringLike(params, "project_id")
 	if err != nil {
 		return "", err
 	}
-	return formatJSON(data), nil
-}
-
-func handleListAnalysisOperations(client *Client) (string, error) {
-	data, err := client.ListAnalysisOperations()
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-// requireString extracts a required string parameter.
-func requireString(params map[string]interface{}, key string) (string, error) {
-	v, ok := params[key]
+	mapState, ok := params["map_state"]
 	if !ok {
-		return "", fmt.Errorf("missing required parameter: %s", key)
+		return "", fmt.Errorf("missing required parameter: map_state")
 	}
-	s, ok := v.(string)
+	payload := map[string]interface{}{"map_state": mapState}
+	if layerStyles, ok := params["layer_styles"]; ok {
+		payload["layer_styles"] = layerStyles
+	}
+	data, err := client.SetProjectWorkspace(projectID, payload)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handlePublishMap(client *Client, params map[string]interface{}) (string, error) {
+	mapState, ok := params["map_state"]
 	if !ok {
-		return "", fmt.Errorf("parameter %s must be a string", key)
+		return "", fmt.Errorf("missing required parameter: map_state")
 	}
-	if s == "" {
-		return "", fmt.Errorf("parameter %s must not be empty", key)
-	}
-	return s, nil
-}
-
-// requireStringLike extracts a required parameter as a string, accepting strings and numbers.
-func requireStringLike(params map[string]interface{}, key string) (string, error) {
-	v, ok := params[key]
-	if !ok {
-		return "", fmt.Errorf("missing required parameter: %s", key)
-	}
-	s, err := stringify(v)
-	if err != nil {
-		return "", fmt.Errorf("parameter %s must be a string or number", key)
-	}
-	if s == "" {
-		return "", fmt.Errorf("parameter %s must not be empty", key)
-	}
-	return s, nil
-}
-
-func requireIntLike(params map[string]interface{}, key string) (int, error) {
-	s, err := requireStringLike(params, key)
-	if err != nil {
-		return 0, err
-	}
-	value, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, fmt.Errorf("parameter %s must be an integer", key)
-	}
-	return value, nil
-}
-
-func parseRoutePoint(v interface{}) ([2]float64, error) {
-	if arr, ok := v.([]interface{}); ok {
-		if len(arr) != 2 {
-			return [2]float64{}, fmt.Errorf("array form must have 2 numbers [lon,lat]")
+	payload := map[string]interface{}{"map_state": mapState}
+	for _, key := range []string{"title", "description", "expires_hours", "embed_config"} {
+		if value, ok := params[key]; ok {
+			payload[key] = value
 		}
-		lon, err := parseFloat64(arr[0])
+	}
+	data, err := client.PublishMap(payload)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleListPublishedMaps(client *Client) (string, error) {
+	data, err := client.ListPublishedMaps()
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleDeletePublishedMap(client *Client, params map[string]interface{}) (string, error) {
+	token, err := requireStringLike(params, "token")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.DeletePublishedMap(token)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleGetPublishedMapStats(client *Client, params map[string]interface{}) (string, error) {
+	token, err := requireStringLike(params, "token")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.GetPublishedMapStats(token)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func handleUpdateMapEmbedConfig(client *Client, params map[string]interface{}) (string, error) {
+	token, err := requireStringLike(params, "token")
+	if err != nil {
+		return "", err
+	}
+	embedConfig, err := requireObject(params, "embed_config")
+	if err != nil {
+		return "", err
+	}
+	data, err := client.UpdateMapEmbedConfig(token, embedConfig)
+	if err != nil {
+		return "", err
+	}
+	return formatJSON(data), nil
+}
+
+func normalizeImportSourcePayload(params map[string]interface{}, projectID string) (map[string]interface{}, error) {
+	name, err := requireStringLike(params, "name")
+	if err != nil {
+		return nil, err
+	}
+	source, err := requireStringLike(params, "source")
+	if err != nil {
+		return nil, err
+	}
+	payload := map[string]interface{}{"name": name, "source": source}
+	for _, key := range []string{"format", "crs", "body_id", "source_type", "catalog_url", "collection"} {
+		if value, ok := params[key]; ok {
+			payload[key] = value
+		}
+	}
+	ensureProjectID(payload, projectID)
+	return payload, nil
+}
+
+func normalizeOperationPayload(params map[string]interface{}, projectID string) (map[string]interface{}, string, error) {
+	operation, err := requireStringLike(params, "operation")
+	if err != nil {
+		return nil, "", err
+	}
+	payload := map[string]interface{}{}
+	for _, key := range []string{"input", "input_geojson", "params", "output_name", "output_format", "register"} {
+		if value, ok := params[key]; ok {
+			payload[key] = value
+		}
+	}
+	if _, ok := payload["output_name"]; !ok {
+		if alias, err := optionalStringLike(params, "output"); err == nil && alias != "" {
+			payload["output_name"] = alias
+		}
+	}
+	if _, ok := payload["output_format"]; !ok {
+		if alias, err := optionalStringLike(params, "format"); err == nil && alias != "" {
+			payload["output_format"] = alias
+		}
+	}
+	if _, ok := payload["params"]; !ok {
+		payload["params"] = map[string]interface{}{}
+	}
+	ensureProjectID(payload, projectID)
+	return payload, operation, nil
+}
+
+func normalizePipelinePayload(params map[string]interface{}) (map[string]interface{}, error) {
+	payload := map[string]interface{}{}
+	if input, err := optionalStringLike(params, "input"); err == nil && input != "" {
+		payload["input"] = input
+	}
+	if inputGeoJSON, ok := params["input_geojson"]; ok {
+		payload["input_geojson"] = inputGeoJSON
+	}
+	steps, err := requireArray(params, "steps")
+	if err != nil {
+		return nil, err
+	}
+	payload["steps"] = steps
+	if _, ok := params["output_name"]; ok {
+		payload["output_name"] = params["output_name"]
+	} else if alias, err := optionalStringLike(params, "output"); err == nil && alias != "" {
+		payload["output_name"] = alias
+	}
+	if register, ok := params["register"]; ok {
+		payload["register"] = register
+	}
+	return payload, nil
+}
+
+func normalizeSQLExecutePayload(params map[string]interface{}) (map[string]interface{}, error) {
+	sqlText, _ := optionalStringLike(params, "sql")
+	if sqlText == "" {
+		alias, _ := optionalStringLike(params, "query")
+		sqlText = alias
+	}
+	if strings.TrimSpace(sqlText) == "" {
+		return nil, fmt.Errorf("missing required parameter: sql")
+	}
+	payload := map[string]interface{}{"sql": sqlText}
+	for _, key := range []string{"limit", "timeout_sec", "format", "query_options"} {
+		if value, ok := params[key]; ok {
+			payload[key] = value
+		}
+	}
+	return payload, nil
+}
+
+func normalizeSQLSavePayload(params map[string]interface{}) (map[string]interface{}, error) {
+	payload, err := normalizeSQLExecutePayload(params)
+	if err != nil {
+		return nil, err
+	}
+	outputName, err := requireStringLike(params, "output_name")
+	if err != nil {
+		return nil, err
+	}
+	payload["output_name"] = outputName
+	if geometryColumn, err := optionalStringLike(params, "geometry_column"); err == nil && geometryColumn != "" {
+		payload["geometry_column"] = geometryColumn
+	}
+	return payload, nil
+}
+
+func formatJSON(value interface{}) string {
+	var raw []byte
+	switch v := value.(type) {
+	case json.RawMessage:
+		raw = v
+	case []byte:
+		raw = v
+	default:
+		data, err := json.Marshal(v)
 		if err != nil {
-			return [2]float64{}, fmt.Errorf("invalid lon")
+			return fmt.Sprintf("%v", v)
 		}
-		lat, err := parseFloat64(arr[1])
-		if err != nil {
-			return [2]float64{}, fmt.Errorf("invalid lat")
-		}
-		return [2]float64{lon, lat}, nil
+		raw = data
 	}
-	m, ok := v.(map[string]interface{})
-	if !ok {
-		return [2]float64{}, fmt.Errorf("must be an object with lat/lon")
+	if len(raw) == 0 {
+		return "{}"
 	}
-	latRaw, ok := m["lat"]
-	if !ok {
-		return [2]float64{}, fmt.Errorf("missing lat")
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, raw, "", "  "); err == nil {
+		return pretty.String()
 	}
-	lonRaw, ok := m["lon"]
-	if !ok {
-		return [2]float64{}, fmt.Errorf("missing lon")
-	}
-	lat, err := parseFloat64(latRaw)
-	if err != nil {
-		return [2]float64{}, fmt.Errorf("invalid lat")
-	}
-	lon, err := parseFloat64(lonRaw)
-	if err != nil {
-		return [2]float64{}, fmt.Errorf("invalid lon")
-	}
-	return [2]float64{lon, lat}, nil
+	return string(raw)
 }
 
-func parseRoutePoints(values []interface{}) ([][2]float64, error) {
-	pts := make([][2]float64, 0, len(values))
-	for i, v := range values {
-		pt, err := parseRoutePoint(v)
-		if err != nil {
-			return nil, fmt.Errorf("index %d: %w", i, err)
-		}
-		pts = append(pts, pt)
+func mustJSONObject(raw json.RawMessage) interface{} {
+	var value interface{}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return string(raw)
 	}
-	return pts, nil
-}
-
-func parseFloat64(v interface{}) (float64, error) {
-	s, err := stringify(v)
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseFloat(s, 64)
-}
-
-func stringify(v interface{}) (string, error) {
-	if s, ok := v.(string); ok {
-		return s, nil
-	}
-	if f, ok := v.(float64); ok {
-		return strconv.FormatFloat(f, 'f', -1, 64), nil
-	}
-	if b, ok := v.(bool); ok {
-		if b {
-			return "true", nil
-		}
-		return "false", nil
-	}
-	return "", fmt.Errorf("unsupported type")
-}
-
-func optionalStringLike(params map[string]interface{}, key string) (string, error) {
-	v, ok := params[key]
-	if !ok || v == nil {
-		return "", nil
-	}
-	return stringify(v)
+	return value
 }
 
 func optionalProjectID(params map[string]interface{}) (string, error) {
-	v, ok := params["project_id"]
-	if !ok || v == nil {
+	value, ok := params["project_id"]
+	if !ok || value == nil {
 		return "", nil
 	}
-	switch raw := v.(type) {
-	case string:
-		return raw, nil
+	return stringify(value)
+}
+
+func ensureProjectID(payload map[string]interface{}, projectID string) {
+	if strings.TrimSpace(projectID) == "" {
+		return
+	}
+	if _, exists := payload["project_id"]; exists {
+		return
+	}
+	payload["project_id"] = projectIDJSONValue(projectID)
+}
+
+func requireObject(params map[string]interface{}, key string) (map[string]interface{}, error) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return nil, fmt.Errorf("missing required parameter: %s", key)
+	}
+	object, ok := value.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("parameter %s must be an object", key)
+	}
+	return object, nil
+}
+
+func requireArray(params map[string]interface{}, key string) ([]interface{}, error) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return nil, fmt.Errorf("missing required parameter: %s", key)
+	}
+	array, ok := value.([]interface{})
+	if !ok || len(array) == 0 {
+		return nil, fmt.Errorf("parameter %s must be a non-empty array", key)
+	}
+	return array, nil
+}
+
+func requireStringLike(params map[string]interface{}, key string) (string, error) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return "", fmt.Errorf("missing required parameter: %s", key)
+	}
+	text, err := stringify(value)
+	if err != nil {
+		return "", fmt.Errorf("parameter %s: %w", key, err)
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", fmt.Errorf("parameter %s must not be empty", key)
+	}
+	return text, nil
+}
+
+func optionalStringLike(params map[string]interface{}, key string) (string, error) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return "", nil
+	}
+	return stringify(value)
+}
+
+func requireIntLike(params map[string]interface{}, key string) (int64, error) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return 0, fmt.Errorf("missing required parameter: %s", key)
+	}
+	switch v := value.(type) {
 	case float64:
-		return strconv.FormatFloat(raw, 'f', -1, 64), nil
-	default:
-		return "", fmt.Errorf("parameter project_id must be a string or number")
-	}
-}
-
-func ensureProjectID(params map[string]interface{}, projectID string) {
-	projectID = strings.TrimSpace(projectID)
-	if projectID == "" {
-		return
-	}
-	if _, ok := params["project_id"]; ok {
-		return
-	}
-	params["project_id"] = projectIDJSONValue(projectID)
-}
-
-func stringLikeParams(params map[string]interface{}, keys ...string) map[string]string {
-	qp := map[string]string{}
-	for _, key := range keys {
-		v, ok := params[key]
-		if !ok {
-			continue
-		}
-		s, err := stringify(v)
-		if err == nil && s != "" {
-			qp[key] = s
-		}
-	}
-	return qp
-}
-
-func handleBrowseCatalog(client *Client, params map[string]interface{}) (string, error) {
-	qp := stringLikeParams(params, "search", "category", "limit", "offset")
-	data, err := client.BrowseCatalog(qp)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleBrowseEnhancedCatalog(client *Client, params map[string]interface{}) (string, error) {
-	qp := map[string]string{}
-	for _, key := range []string{"search", "category", "formats", "tags", "live_only", "sort", "order", "bbox", "limit", "offset"} {
-		if v, ok := params[key]; ok {
-			s, err := stringify(v)
-			if err == nil && s != "" {
-				qp[key] = s
-			}
-		}
-	}
-	data, err := client.BrowseEnhancedCatalog(qp)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleGetCatalogEntry(client *Client, params map[string]interface{}) (string, error) {
-	id, err := requireString(params, "id")
-	if err != nil {
-		return "", err
-	}
-	data, err := client.GetCatalogEntry(id)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleListCatalogCategories(client *Client) (string, error) {
-	data, err := client.ListCatalogCategories()
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleListCatalogTags(client *Client, params map[string]interface{}) (string, error) {
-	limit := ""
-	if v, ok := params["limit"]; ok {
-		if s, err := stringify(v); err == nil {
-			limit = s
-		}
-	}
-	data, err := client.ListCatalogTags(limit)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleImportFromCatalog(client *Client, params map[string]interface{}) (string, error) {
-	catalogID, err := requireString(params, "catalog_id")
-	if err != nil {
-		return "", err
-	}
-	data, err := client.ImportFromCatalog(catalogID, client.ProjectID)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleBrowseSTACCatalog(client *Client, params map[string]interface{}) (string, error) {
-	catalogURL, err := requireString(params, "url")
-	if err != nil {
-		return "", err
-	}
-	data, err := client.BrowseSTACCatalog(catalogURL)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleBrowseSTACCollections(client *Client, params map[string]interface{}) (string, error) {
-	catalogURL, err := requireString(params, "url")
-	if err != nil {
-		return "", err
-	}
-	data, err := client.BrowseSTACCollections(catalogURL)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleBrowseSTACItems(client *Client, params map[string]interface{}) (string, error) {
-	collURL, err := requireString(params, "url")
-	if err != nil {
-		return "", err
-	}
-	qp := stringLikeParams(params, "bbox", "datetime")
-	data, err := client.BrowseSTACItems(collURL, qp)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleImportSTACAsset(client *Client, params map[string]interface{}) (string, error) {
-	assetURL, err := requireString(params, "asset_url")
-	if err != nil {
-		return "", err
-	}
-	name, err := requireString(params, "name")
-	if err != nil {
-		return "", err
-	}
-	format, _ := params["format"].(string)
-	namespace, _ := optionalStringLike(params, "namespace")
-	collection, _ := optionalStringLike(params, "collection")
-	catalogURL, _ := optionalStringLike(params, "catalog_url")
-	payload := buildSTACImportPayload(assetURL, name, format, client.ProjectID, map[string]string{
-		"namespace":   namespace,
-		"collection":  collection,
-		"catalog_url": catalogURL,
-	})
-	data, err := client.ImportSTACAsset(payload)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleSearchSTAC(client *Client, params map[string]interface{}) (string, error) {
-	qp := stringLikeParams(params, "bbox", "datetime", "collections", "limit", "filter")
-	data, err := client.SearchSTAC(qp)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func handleMapAPI(client *Client, params map[string]interface{}) (string, error) {
-	return handleScopedAPI(client, params, mapOperations, "map")
-}
-
-func handleScopedAPI(client *Client, params map[string]interface{}, ops map[string]apiOperation, scope string) (string, error) {
-	opName, err := requireString(params, "operation")
-	if err != nil {
-		return "", err
-	}
-	op, ok := ops[opName]
-	if !ok {
-		return "", fmt.Errorf("unknown %s operation: %s", scope, opName)
-	}
-	if op.Mutating && !requireConfirm(params) {
-		return "", fmt.Errorf("%s operation %q mutates data; pass confirm=true to proceed", scope, opName)
-	}
-	path, err := interpolatePath(op.Path, params)
-	if err != nil {
-		return "", err
-	}
-	query, err := extractQuery(params)
-	if err != nil {
-		return "", err
-	}
-	body := extractBody(params)
-	if op.Method == "GET" || op.Method == "DELETE" {
-		body = nil
-	}
-
-	data, err := client.APIRequest(op.Method, path, body, query)
-	if err != nil {
-		return "", err
-	}
-	return formatJSON(data), nil
-}
-
-func requireConfirm(params map[string]interface{}) bool {
-	v, ok := params["confirm"]
-	if !ok {
-		return false
-	}
-	b, ok := v.(bool)
-	return ok && b
-}
-
-func extractBody(params map[string]interface{}) interface{} {
-	if raw, ok := params["body"]; ok {
-		if _, ok := raw.(map[string]interface{}); ok {
-			return raw
-		}
-		if _, ok := raw.([]interface{}); ok {
-			return raw
-		}
-	}
-	return nil
-}
-
-func extractQuery(params map[string]interface{}) (map[string]string, error) {
-	raw, ok := params["query"]
-	if !ok {
-		return nil, nil
-	}
-	m, ok := raw.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("query must be an object of key/value pairs")
-	}
-	out := make(map[string]string, len(m))
-	for k, v := range m {
-		if k == "" || v == nil {
-			continue
-		}
-		s, err := stringify(v)
+		return int64(v), nil
+	case int:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case json.Number:
+		return v.Int64()
+	case string:
+		n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("query.%s must be string/number/bool", k)
+			return 0, fmt.Errorf("parameter %s must be an integer", key)
 		}
-		out[k] = s
-	}
-	return out, nil
-}
-
-func interpolatePath(tpl string, params map[string]interface{}) (string, error) {
-	out := tpl
-	for {
-		start := strings.IndexByte(out, '{')
-		if start == -1 {
-			return out, nil
-		}
-		end := strings.IndexByte(out[start:], '}')
-		if end == -1 {
-			return "", fmt.Errorf("invalid operation path template: %s", tpl)
-		}
-		end += start
-		key := out[start+1 : end]
-		val, ok := params[key]
-		if !ok {
-			return "", fmt.Errorf("missing required path parameter: %s", key)
-		}
-		s, err := stringify(val)
-		if err != nil || strings.TrimSpace(s) == "" {
-			return "", fmt.Errorf("invalid path parameter %s", key)
-		}
-		out = out[:start] + url.PathEscape(s) + out[end+1:]
+		return n, nil
+	default:
+		return 0, fmt.Errorf("parameter %s must be an integer", key)
 	}
 }
 
-// formatJSON pretty-prints JSON for readability in agent responses.
-func formatJSON(data json.RawMessage) string {
-	var out json.RawMessage
-	if err := json.Unmarshal(data, &out); err != nil {
-		return string(data)
+func stringify(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v), nil
+	case float64:
+		return strconv.FormatInt(int64(v), 10), nil
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32), nil
+	case int:
+		return strconv.Itoa(v), nil
+	case int64:
+		return strconv.FormatInt(v, 10), nil
+	case int32:
+		return strconv.FormatInt(int64(v), 10), nil
+	case json.Number:
+		return v.String(), nil
+	case bool:
+		if v {
+			return "true", nil
+		}
+		return "false", nil
+	default:
+		return "", fmt.Errorf("expected string-like value")
 	}
-	pretty, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return string(data)
-	}
-	return string(pretty)
 }

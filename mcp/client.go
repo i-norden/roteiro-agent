@@ -1,5 +1,5 @@
 // Package mcp implements an MCP (Model Context Protocol) server that exposes
-// Roteiro's spatial data platform to AI agents.
+// Cairn's stable public API to AI agents.
 package mcp
 
 import (
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// Client is a thin HTTP wrapper for the Roteiro REST API.
+// Client is a thin HTTP wrapper for the Cairn REST API.
 type Client struct {
 	BaseURL       string
 	APIKey        string
@@ -71,45 +71,21 @@ func (c *Client) WithProjectID(projectID string) *Client {
 	return &clone
 }
 
-func (c *Client) get(path string, query url.Values) ([]byte, int, error) {
-	u := c.BaseURL + path
-	if len(query) > 0 {
-		u += "?" + query.Encode()
-	}
-	req, err := http.NewRequest("GET", u, nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	return c.do(req)
-}
-
-func (c *Client) postJSON(path string, payload interface{}) ([]byte, int, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, 0, err
-	}
-	req, err := http.NewRequest("POST", c.BaseURL+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, 0, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	return c.do(req)
-}
-
-func (c *Client) callJSON(method, path string, payload interface{}, query map[string]string) ([]byte, int, error) {
+func (c *Client) request(method, path string, payload interface{}, query map[string]string, headers map[string]string, expected ...int) (json.RawMessage, error) {
 	if !strings.HasPrefix(path, "/") {
-		return nil, 0, fmt.Errorf("path must start with '/': %s", path)
+		return nil, fmt.Errorf("path must start with '/': %s", path)
 	}
+
 	u := c.BaseURL + path
 	if len(query) > 0 {
 		q := url.Values{}
-		for k, v := range query {
-			if k != "" && v != "" {
-				q.Set(k, v)
+		for key, value := range query {
+			if key != "" && value != "" {
+				q.Set(key, value)
 			}
 		}
-		if enc := q.Encode(); enc != "" {
-			u += "?" + enc
+		if encoded := q.Encode(); encoded != "" {
+			u += "?" + encoded
 		}
 	}
 
@@ -117,722 +93,316 @@ func (c *Client) callJSON(method, path string, payload interface{}, query map[st
 	if payload != nil {
 		data, err := json.Marshal(payload)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		body = bytes.NewReader(data)
 	}
 
 	req, err := http.NewRequest(method, u, body)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.do(req)
-}
+	for key, value := range headers {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+			req.Header.Set(key, value)
+		}
+	}
 
-// APIRequest sends a constrained API request used by allowlisted MCP tools.
-func (c *Client) APIRequest(method, path string, payload interface{}, query map[string]string) (json.RawMessage, error) {
-	body, code, err := c.callJSON(method, path, payload, query)
+	respBody, code, err := c.do(req)
 	if err != nil {
 		return nil, err
 	}
-	if code < 200 || code >= 300 {
-		return nil, fmt.Errorf("%s %s returned %d: %s", method, path, code, truncate(body, 500))
+	if len(expected) == 0 {
+		if code < 200 || code >= 300 {
+			return nil, fmt.Errorf("%s %s returned %d: %s", method, path, code, truncate(respBody, 500))
+		}
+	} else {
+		matched := false
+		for _, want := range expected {
+			if code == want {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return nil, fmt.Errorf("%s %s returned %d: %s", method, path, code, truncate(respBody, 500))
+		}
 	}
-	if len(body) == 0 {
+	if len(respBody) == 0 {
 		return json.RawMessage(`{"status":"ok"}`), nil
 	}
-	return json.RawMessage(body), nil
+	return json.RawMessage(respBody), nil
 }
 
-// ListDatasets calls GET /datasets.
-func (c *Client) ListDatasets() (json.RawMessage, error) {
-	body, code, err := c.get("/datasets", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /datasets returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// GetCollection calls GET /collections/{id}.
-func (c *Client) GetCollection(id string) (json.RawMessage, error) {
-	body, code, err := c.get("/collections/"+url.PathEscape(id), nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /collections/%s returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// QueryFeatures calls GET /collections/{id}/items with optional query params.
-func (c *Client) QueryFeatures(id string, params map[string]string) (json.RawMessage, error) {
-	q := url.Values{}
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	body, code, err := c.get("/collections/"+url.PathEscape(id)+"/items", q)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /collections/%s/items returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// GetFeature calls GET /collections/{id}/items/{fid}.
-func (c *Client) GetFeature(collectionID, featureID string) (json.RawMessage, error) {
-	path := fmt.Sprintf("/collections/%s/items/%s", url.PathEscape(collectionID), url.PathEscape(featureID))
-	body, code, err := c.get(path, nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET %s returned %d: %s", path, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// UploadMultipart calls POST {path} with a multipart file upload.
-func (c *Client) UploadMultipart(path, filePath, fieldName string, extraFields map[string]string) (json.RawMessage, error) {
-	f, err := os.Open(filePath)
+func (c *Client) UploadFile(filePath, name, projectID, bodyID string) (json.RawMessage, error) {
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer file.Close()
 
 	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-	part, err := w.CreateFormFile(fieldName, filepath.Base(filePath))
+	writer := multipart.NewWriter(&buf)
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		return nil, err
 	}
-	if _, err := io.Copy(part, f); err != nil {
+	if _, err := io.Copy(part, file); err != nil {
 		return nil, err
 	}
-	for key, value := range extraFields {
-		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
-			continue
-		}
-		if err := w.WriteField(key, value); err != nil {
+	if strings.TrimSpace(name) != "" {
+		if err := writer.WriteField("name", name); err != nil {
 			return nil, err
 		}
 	}
-	if err := w.Close(); err != nil {
+	if strings.TrimSpace(projectID) != "" {
+		if err := writer.WriteField("project_id", projectID); err != nil {
+			return nil, err
+		}
+	}
+	if strings.TrimSpace(bodyID) != "" {
+		if err := writer.WriteField("body_id", bodyID); err != nil {
+			return nil, err
+		}
+	}
+	if err := writer.Close(); err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", c.BaseURL+path, &buf)
+	req, err := http.NewRequest("POST", c.BaseURL+"/upload", &buf)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 	body, code, err := c.do(req)
 	if err != nil {
 		return nil, err
 	}
-	if code != http.StatusOK && code != http.StatusCreated {
-		return nil, fmt.Errorf("POST %s returned %d: %s", path, code, truncate(body, 500))
+	if code != http.StatusOK && code != http.StatusCreated && code != http.StatusAccepted {
+		return nil, fmt.Errorf("POST /upload returned %d: %s", code, truncate(body, 500))
 	}
 	return json.RawMessage(body), nil
 }
 
-// UploadFile calls POST /upload with a multipart file upload.
-func (c *Client) UploadFile(filePath, name, projectID string) (json.RawMessage, error) {
-	extraFields := map[string]string{}
-	if strings.TrimSpace(name) != "" {
-		extraFields["name"] = name
-	}
-	if strings.TrimSpace(projectID) != "" {
-		extraFields["project_id"] = projectID
-	}
-	return c.UploadMultipart("/upload", filePath, "file", extraFields)
+func (c *Client) ListDatasets() (json.RawMessage, error) {
+	return c.request("GET", "/datasets", nil, nil, nil, http.StatusOK)
 }
 
-// RunProcess calls POST /api/process.
-func (c *Client) RunProcess(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/process", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/process returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) GetCollection(id string) (json.RawMessage, error) {
+	return c.request("GET", "/collections/"+url.PathEscape(id), nil, nil, nil, http.StatusOK)
 }
 
-// RunRasterProcess calls POST /api/raster/process.
-func (c *Client) RunRasterProcess(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/raster/process", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/raster/process returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) QueryFeatures(id string, params map[string]string) (json.RawMessage, error) {
+	return c.request("GET", "/collections/"+url.PathEscape(id)+"/items", nil, params, nil, http.StatusOK)
 }
 
-// PreflightProcess calls POST /api/process/preflight.
-func (c *Client) PreflightProcess(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/process/preflight", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/process/preflight returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) GetFeature(collectionID, featureID string) (json.RawMessage, error) {
+	path := fmt.Sprintf("/collections/%s/items/%s", url.PathEscape(collectionID), url.PathEscape(featureID))
+	return c.request("GET", path, nil, nil, nil, http.StatusOK)
 }
 
-// SubmitProcessJob calls POST /api/process/jobs.
-func (c *Client) SubmitProcessJob(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/process/jobs", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusAccepted {
-		return nil, fmt.Errorf("POST /api/process/jobs returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) CreateFeature(collectionID string, feature interface{}) (json.RawMessage, error) {
+	path := fmt.Sprintf("/collections/%s/items", url.PathEscape(collectionID))
+	return c.request("POST", path, feature, nil, map[string]string{"Content-Type": "application/geo+json"}, http.StatusOK, http.StatusCreated)
 }
 
-// SubmitProcessBatch calls POST /api/process/jobs/batch.
-func (c *Client) SubmitProcessBatch(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/process/jobs/batch", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusAccepted {
-		return nil, fmt.Errorf("POST /api/process/jobs/batch returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) UpdateFeature(collectionID, featureID string, feature interface{}) (json.RawMessage, error) {
+	path := fmt.Sprintf("/collections/%s/items/%s", url.PathEscape(collectionID), url.PathEscape(featureID))
+	return c.request("PUT", path, feature, nil, map[string]string{"Content-Type": "application/geo+json"}, http.StatusOK)
 }
 
-// ListProcessJobs calls GET /api/process/jobs.
-func (c *Client) ListProcessJobs(params map[string]string) (json.RawMessage, error) {
-	q := url.Values{}
-	for k, v := range params {
-		if v != "" {
-			q.Set(k, v)
-		}
-	}
-	body, code, err := c.get("/api/process/jobs", q)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/process/jobs returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) DeleteFeature(collectionID, featureID string) (json.RawMessage, error) {
+	path := fmt.Sprintf("/collections/%s/items/%s", url.PathEscape(collectionID), url.PathEscape(featureID))
+	return c.request("DELETE", path, nil, nil, nil, http.StatusNoContent)
 }
 
-// GetProcessJob calls GET /api/process/jobs/{id}.
-func (c *Client) GetProcessJob(id string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/process/jobs/"+url.PathEscape(id), nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/process/jobs/%s returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// CancelProcessJob calls DELETE /api/process/jobs/{id}.
-func (c *Client) CancelProcessJob(id string) (json.RawMessage, error) {
-	body, code, err := c.callJSON("DELETE", "/api/process/jobs/"+url.PathEscape(id), nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusNoContent {
-		return nil, fmt.Errorf("DELETE /api/process/jobs/%s returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(`{"status":"cancelled"}`), nil
-}
-
-// RerunProcessJob calls POST /api/process/jobs/{id}/rerun.
-func (c *Client) RerunProcessJob(id string) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/process/jobs/"+url.PathEscape(id)+"/rerun", map[string]interface{}{})
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusAccepted {
-		return nil, fmt.Errorf("POST /api/process/jobs/%s/rerun returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// RunPipeline calls POST /api/pipeline.
-func (c *Client) RunPipeline(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/pipeline", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/pipeline returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ListPipelineTemplates calls GET /api/pipelines/templates.
-func (c *Client) ListPipelineTemplates() (json.RawMessage, error) {
-	body, code, err := c.get("/api/pipelines/templates", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/pipelines/templates returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ListPipelines calls GET /api/pipelines.
-func (c *Client) ListPipelines() (json.RawMessage, error) {
-	body, code, err := c.get("/api/pipelines", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/pipelines returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// GetPipeline calls GET /api/pipelines/{id}.
-func (c *Client) GetPipeline(id string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/pipelines/"+url.PathEscape(id), nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/pipelines/%s returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// CreatePipeline calls POST /api/pipelines.
-func (c *Client) CreatePipeline(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/pipelines", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusCreated {
-		return nil, fmt.Errorf("POST /api/pipelines returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// UpdatePipeline calls PUT /api/pipelines/{id}.
-func (c *Client) UpdatePipeline(id string, payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.callJSON("PUT", "/api/pipelines/"+url.PathEscape(id), payload, nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("PUT /api/pipelines/%s returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// DeletePipeline calls DELETE /api/pipelines/{id}.
-func (c *Client) DeletePipeline(id string) (json.RawMessage, error) {
-	body, code, err := c.callJSON("DELETE", "/api/pipelines/"+url.PathEscape(id), nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusNoContent {
-		return nil, fmt.Errorf("DELETE /api/pipelines/%s returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(`{"status":"deleted"}`), nil
-}
-
-// DuplicatePipeline calls POST /api/pipelines/{id}/duplicate.
-func (c *Client) DuplicatePipeline(id string) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/pipelines/"+url.PathEscape(id)+"/duplicate", map[string]interface{}{})
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusCreated {
-		return nil, fmt.Errorf("POST /api/pipelines/%s/duplicate returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ExecutePipeline calls POST /api/pipelines/{id}/execute.
-func (c *Client) ExecutePipeline(id string) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/pipelines/"+url.PathEscape(id)+"/execute", map[string]interface{}{})
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/pipelines/%s/execute returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ConvertFormat calls POST /api/convert.
-func (c *Client) ConvertFormat(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/convert", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK && code != http.StatusCreated {
-		return nil, fmt.Errorf("POST /api/convert returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// DiffDatasets calls POST /api/diff.
-func (c *Client) DiffDatasets(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/diff", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/diff returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ExecuteSQL calls POST /api/query/sql.
-func (c *Client) ExecuteSQL(query string) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/query/sql", map[string]string{"sql": query})
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST SQL query endpoint returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ListSpatialTables calls GET /api/query/sql/datasets.
-func (c *Client) ListSpatialTables() (json.RawMessage, error) {
-	body, code, err := c.get("/api/query/sql/datasets", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET SQL tables endpoint returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// GetDuckDBInfo calls GET /api/query/sql/info.
-func (c *Client) GetDuckDBInfo() (json.RawMessage, error) {
-	body, code, err := c.get("/api/query/sql/info", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/query/sql/info returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ListDuckDBDatasets calls GET /api/query/sql/datasets.
-func (c *Client) ListDuckDBDatasets() (json.RawMessage, error) {
-	body, code, err := c.get("/api/query/sql/datasets", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/query/sql/datasets returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// Geocode calls GET /api/geocode.
-func (c *Client) Geocode(address string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/geocode", url.Values{"q": {address}})
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/geocode returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ReverseGeocode calls GET /api/geocode/reverse.
-func (c *Client) ReverseGeocode(lat, lon string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/geocode/reverse", url.Values{"lat": {lat}, "lon": {lon}})
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/geocode/reverse returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ComputeRoute calls POST /api/route.
-func (c *Client) ComputeRoute(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/route", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/route returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ComputeIsochrone calls POST /api/route/isochrone.
-func (c *Client) ComputeIsochrone(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/route/isochrone", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/route/isochrone returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ComputeRouteMatrix calls POST /api/route/matrix.
-func (c *Client) ComputeRouteMatrix(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/route/matrix", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/route/matrix returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ComputeServiceArea calls POST /api/route/service-area.
-func (c *Client) ComputeServiceArea(payload interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/route/service-area", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("POST /api/route/service-area returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ListOperations calls GET /api/operations.
-func (c *Client) ListOperations() (json.RawMessage, error) {
-	body, code, err := c.get("/api/operations", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/operations returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// ListAnalysisOperations calls GET /api/analysis/operations.
-func (c *Client) ListAnalysisOperations() (json.RawMessage, error) {
-	body, code, err := c.get("/api/analysis/operations", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/analysis/operations returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
-}
-
-// GetDatasetSchema calls GET /api/datasets/{name}/schema.
 func (c *Client) GetDatasetSchema(name string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/datasets/"+url.PathEscape(name)+"/schema", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/datasets/%s/schema returned %d: %s", name, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+	return c.request("GET", "/api/v1/datasets/"+url.PathEscape(name)+"/schema", nil, nil, nil, http.StatusOK)
 }
 
-// GetDatasetProfile calls GET /api/datasets/{name}/profile.
 func (c *Client) GetDatasetProfile(name string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/datasets/"+url.PathEscape(name)+"/profile", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/datasets/%s/profile returned %d: %s", name, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+	return c.request("GET", "/api/v1/datasets/"+url.PathEscape(name)+"/profile", nil, nil, nil, http.StatusOK)
 }
 
-// BrowseCatalog calls GET /api/catalog.
-func (c *Client) BrowseCatalog(params map[string]string) (json.RawMessage, error) {
-	q := url.Values{}
-	for k, v := range params {
-		if v != "" {
-			q.Set(k, v)
-		}
-	}
-	body, code, err := c.get("/api/catalog", q)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/catalog returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) ImportSource(payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/datasets/import-source", payload, nil, nil, http.StatusOK, http.StatusCreated, http.StatusAccepted)
 }
 
-// BrowseEnhancedCatalog calls GET /api/catalog/enhanced.
-func (c *Client) BrowseEnhancedCatalog(params map[string]string) (json.RawMessage, error) {
-	q := url.Values{}
-	for k, v := range params {
-		if v != "" {
-			q.Set(k, v)
-		}
-	}
-	body, code, err := c.get("/api/catalog/enhanced", q)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/catalog/enhanced returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) GetSceneManifest() (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/scene-manifest", nil, nil, nil, http.StatusOK)
 }
 
-// GetCatalogEntry calls GET /api/catalog/enhanced/{id}.
-func (c *Client) GetCatalogEntry(id string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/catalog/enhanced/"+url.PathEscape(id), nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/catalog/enhanced/%s returned %d: %s", id, code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) ListBodies() (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/bodies", nil, nil, nil, http.StatusOK)
 }
 
-// ListCatalogCategories calls GET /api/catalog/categories.
-func (c *Client) ListCatalogCategories() (json.RawMessage, error) {
-	body, code, err := c.get("/api/catalog/categories", nil)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/catalog/categories returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) GetBody(slug string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/bodies/"+url.PathEscape(slug), nil, nil, nil, http.StatusOK)
 }
 
-// ListCatalogTags calls GET /api/catalog/tags.
-func (c *Client) ListCatalogTags(limit string) (json.RawMessage, error) {
-	q := url.Values{}
-	if limit != "" {
-		q.Set("limit", limit)
-	}
-	body, code, err := c.get("/api/catalog/tags", q)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/catalog/tags returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) GetBodyRecipes(slug string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/bodies/"+url.PathEscape(slug)+"/recipes", nil, nil, nil, http.StatusOK)
 }
 
-// ImportFromCatalog calls POST /api/catalog/import.
-func (c *Client) ImportFromCatalog(catalogID, projectID string) (json.RawMessage, error) {
-	payload := map[string]interface{}{"catalog_id": catalogID}
-	if strings.TrimSpace(projectID) != "" {
-		payload["project_id"] = projectIDJSONValue(projectID)
-	}
-	body, code, err := c.postJSON("/api/catalog/import", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK && code != http.StatusCreated && code != http.StatusAccepted {
-		return nil, fmt.Errorf("POST /api/catalog/import returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) ExecuteBodyRecipe(slug, sourceID string) (json.RawMessage, error) {
+	path := fmt.Sprintf("/api/v1/bodies/%s/recipes/%s/execute", url.PathEscape(slug), url.PathEscape(sourceID))
+	return c.request("POST", path, map[string]interface{}{}, nil, nil, http.StatusOK)
 }
 
-// BrowseSTACCatalog calls GET /api/stac/remote.
-func (c *Client) BrowseSTACCatalog(catalogURL string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/stac/remote", url.Values{"url": {catalogURL}})
-	if err != nil {
-		return nil, err
+func (c *Client) ListOperations(domain string) (json.RawMessage, error) {
+	query := map[string]string{}
+	if strings.TrimSpace(domain) != "" {
+		query["domain"] = domain
 	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/stac/remote returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+	return c.request("GET", "/api/v1/ops", nil, query, nil, http.StatusOK)
 }
 
-// BrowseSTACCollections calls GET /api/stac/remote/collections.
-func (c *Client) BrowseSTACCollections(catalogURL string) (json.RawMessage, error) {
-	body, code, err := c.get("/api/stac/remote/collections", url.Values{"url": {catalogURL}})
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/stac/remote/collections returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) PreflightOperation(payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/ops/preflight", payload, nil, nil, http.StatusOK)
 }
 
-// BrowseSTACItems calls GET /api/stac/remote/items.
-func (c *Client) BrowseSTACItems(collectionURL string, params map[string]string) (json.RawMessage, error) {
-	q := url.Values{"url": {collectionURL}}
-	for k, v := range params {
-		if v != "" {
-			q.Set(k, v)
-		}
-	}
-	body, code, err := c.get("/api/stac/remote/items", q)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /api/stac/remote/items returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) RunOperation(operation string, payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/ops/"+url.PathEscape(operation), payload, nil, nil, http.StatusOK)
 }
 
-// ImportSTACAsset calls POST /api/stac/import.
-func (c *Client) ImportSTACAsset(payload map[string]interface{}) (json.RawMessage, error) {
-	body, code, err := c.postJSON("/api/stac/import", payload)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK && code != http.StatusCreated && code != http.StatusAccepted {
-		return nil, fmt.Errorf("POST /api/stac/import returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
+func (c *Client) SubmitOperationJob(operation string, payload interface{}) (json.RawMessage, error) {
+	path := "/api/v1/ops/by-operation/" + url.PathEscape(operation) + "/jobs"
+	return c.request("POST", path, payload, nil, nil, http.StatusOK, http.StatusAccepted)
 }
 
-func buildSTACImportPayload(assetURL, name, format, projectID string, extras map[string]string) map[string]interface{} {
-	payload := map[string]interface{}{
-		"asset_url": assetURL,
-		"name":      name,
-	}
-	if format != "" {
-		payload["format"] = format
-	}
-	if strings.TrimSpace(projectID) != "" {
-		payload["project_id"] = projectIDJSONValue(projectID)
-	}
-	for key, value := range extras {
-		if strings.TrimSpace(value) != "" {
-			payload[key] = value
-		}
-	}
-	return payload
+func (c *Client) SubmitOperationBatch(payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/ops/jobs/batch", payload, nil, nil, http.StatusOK, http.StatusAccepted)
+}
+
+func (c *Client) ListOperationJobs(params map[string]string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/ops/jobs", nil, params, nil, http.StatusOK)
+}
+
+func (c *Client) GetOperationJob(id string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/ops/jobs/"+url.PathEscape(id), nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) CancelOperationJob(id string) (json.RawMessage, error) {
+	return c.request("DELETE", "/api/v1/ops/jobs/"+url.PathEscape(id), nil, nil, nil, http.StatusNoContent)
+}
+
+func (c *Client) RerunOperationJob(id string) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/ops/jobs/"+url.PathEscape(id)+"/rerun", map[string]interface{}{}, nil, nil, http.StatusOK, http.StatusAccepted)
+}
+
+func (c *Client) ListPipelineOperations() (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/pipeline/operations", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) RunPipeline(payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/pipeline", payload, nil, nil, http.StatusOK)
+}
+
+func (c *Client) ListPipelines() (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/pipelines", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) GetPipeline(id string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/pipelines/"+url.PathEscape(id), nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) CreatePipeline(payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/pipelines", payload, nil, nil, http.StatusOK, http.StatusCreated)
+}
+
+func (c *Client) UpdatePipeline(id string, payload interface{}) (json.RawMessage, error) {
+	return c.request("PUT", "/api/v1/pipelines/"+url.PathEscape(id), payload, nil, nil, http.StatusOK)
+}
+
+func (c *Client) DeletePipeline(id string) (json.RawMessage, error) {
+	return c.request("DELETE", "/api/v1/pipelines/"+url.PathEscape(id), nil, nil, nil, http.StatusNoContent)
+}
+
+func (c *Client) DuplicatePipeline(id string) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/pipelines/"+url.PathEscape(id)+"/duplicate", map[string]interface{}{}, nil, nil, http.StatusOK, http.StatusCreated)
+}
+
+func (c *Client) ExecutePipeline(id string) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/pipelines/"+url.PathEscape(id)+"/execute", map[string]interface{}{}, nil, nil, http.StatusOK)
+}
+
+func (c *Client) ListPipelineRuns(id string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/pipelines/"+url.PathEscape(id)+"/runs", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) GetPipelineRun(id string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/pipeline-runs/"+url.PathEscape(id), nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) ListQueryEngines() (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/query/engines", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) GetQueryEngineInfo(engine string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/query/sql/info", nil, map[string]string{"engine": engine}, nil, http.StatusOK)
+}
+
+func (c *Client) ListQueryDatasets(engine string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/query/sql/datasets", nil, map[string]string{"engine": engine}, nil, http.StatusOK)
+}
+
+func (c *Client) ExecuteSQL(engine string, payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/query/sql", payload, map[string]string{"engine": engine}, nil, http.StatusOK)
+}
+
+func (c *Client) SaveSQLResult(engine string, payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/query/sql/save", payload, map[string]string{"engine": engine}, nil, http.StatusCreated)
+}
+
+func (c *Client) ListProjects() (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/projects", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) GetProject(id string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/projects/"+url.PathEscape(id), nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) CreateProject(payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/projects", payload, nil, nil, http.StatusOK, http.StatusCreated)
+}
+
+func (c *Client) UpdateProject(id string, payload interface{}) (json.RawMessage, error) {
+	return c.request("PUT", "/api/v1/projects/"+url.PathEscape(id), payload, nil, nil, http.StatusOK)
+}
+
+func (c *Client) DeleteProject(id string) (json.RawMessage, error) {
+	return c.request("DELETE", "/api/v1/projects/"+url.PathEscape(id), nil, nil, nil, http.StatusNoContent)
+}
+
+func (c *Client) GetProjectWorkspace(id string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/projects/"+url.PathEscape(id)+"/workspace", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) SetProjectWorkspace(id string, payload interface{}) (json.RawMessage, error) {
+	return c.request("PUT", "/api/v1/projects/"+url.PathEscape(id)+"/workspace", payload, nil, nil, http.StatusOK)
+}
+
+func (c *Client) PublishMap(payload interface{}) (json.RawMessage, error) {
+	return c.request("POST", "/api/v1/maps/publish", payload, nil, nil, http.StatusOK, http.StatusCreated)
+}
+
+func (c *Client) ListPublishedMaps() (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/maps/published", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) DeletePublishedMap(token string) (json.RawMessage, error) {
+	return c.request("DELETE", "/api/v1/maps/published/"+url.PathEscape(token), nil, nil, nil, http.StatusNoContent)
+}
+
+func (c *Client) GetPublishedMapStats(token string) (json.RawMessage, error) {
+	return c.request("GET", "/api/v1/maps/published/"+url.PathEscape(token)+"/stats", nil, nil, nil, http.StatusOK)
+}
+
+func (c *Client) UpdateMapEmbedConfig(token string, payload interface{}) (json.RawMessage, error) {
+	return c.request("PUT", "/api/v1/maps/published/"+url.PathEscape(token)+"/embed-config", payload, nil, nil, http.StatusOK)
 }
 
 func projectIDJSONValue(projectID string) interface{} {
@@ -844,24 +414,6 @@ func projectIDJSONValue(projectID string) interface{} {
 		return n
 	}
 	return projectID
-}
-
-// SearchSTAC calls GET /stac/search.
-func (c *Client) SearchSTAC(params map[string]string) (json.RawMessage, error) {
-	q := url.Values{}
-	for k, v := range params {
-		if v != "" {
-			q.Set(k, v)
-		}
-	}
-	body, code, err := c.get("/stac/search", q)
-	if err != nil {
-		return nil, err
-	}
-	if code != http.StatusOK {
-		return nil, fmt.Errorf("GET /stac/search returned %d: %s", code, truncate(body, 500))
-	}
-	return json.RawMessage(body), nil
 }
 
 func truncate(b []byte, n int) string {
